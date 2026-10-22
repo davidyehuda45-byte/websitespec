@@ -255,21 +255,6 @@ export default function App() {
             ))}
           </select>
         </div>
-
-        <div className="config-item">
-          <label className="config-label">
-            <FileText size={14} />
-            <span>Profil Output</span>
-          </label>
-          <select
-            className="config-select"
-            value={outputProfile}
-            onChange={handleOutputProfileChange}
-          >
-            <option value="compact">Ringkas (Hemat Token, ~4k-6k token)</option>
-            <option value="full">Lengkap (Seluruh Pohon & Style Detail)</option>
-          </select>
-        </div>
       </section>
 
       {/* Cart Page List */}

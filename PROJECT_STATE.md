@@ -5,13 +5,13 @@
 **Framework**: WXT + React 19 + TypeScript + Vite  
 
 ## Key Components Implemented
-- `src/types/blueprint.ts`: Strong TypeScript data model (`ColorToken`, `DesignTokens`, `LayoutNode`, `DetectedStack`, `PageBlueprint`, `ProjectBlueprint`).
-- `src/core/normalize/defaults.ts`: Strips noisy CSS browser defaults, normalizes 4-way box-model shorthand.
-- `src/core/normalize/dedupe.ts`: Detects contiguous repeating sibling elements (cards/grid) and collapses into representative node with `repeatCount`.
-- `src/core/extract/color.ts`: Converts RGB/RGBA/HSL to 6/8-digit HEX, resolves ancestor effective backgrounds, clusters colors by role.
+- `src/types/blueprint.ts`: Strong TypeScript data model (`ColorToken`, `DesignTokens`, `LayoutNode`, `DetectedStack`, `PageBlueprint`, `ProjectBlueprint`) with `href`, `ariaLabel`, and `placeholder`.
+- `src/core/normalize/defaults.ts`: Context-aware CSS default stripping (only includes flex/grid/position properties when contextually valid; strips all-zero shadows).
+- `src/core/normalize/dedupe.ts`: 100% full fidelity mode (no lossy collapse of menu items or card lists).
+- `src/core/extract/color.ts`: Converts RGB/RGBA/HSL to 6/8-digit HEX, resolves ancestor effective backgrounds, clusters colors by precise usage statistics (`textCount` vs `bgCount`).
 - `src/core/extract/tokens.ts`: Mines global tokens, typography scale, spacing, radius, shadows, `:root` CSS variables, font sources.
-- `src/core/extract/layout.ts`: Recursive DOM traversal with computed style filtering, copywriting extraction, component mode support.
-- `src/core/extract/assets.ts`: Extracts `<img>`, inline `<svg>`, and CSS background images.
+- `src/core/extract/layout.ts`: Deep recursive DOM traversal (up to 20 levels) without truncating `aria-hidden` icons or children, captures exact copywriting, input placeholders, aria labels, and link destinations (`href`).
+- `src/core/extract/assets.ts`: Extracts `<img>`, unclipped `<svg>`, icon font classes (Material Design Icons, FontAwesome, etc.), and CSS background images.
 - `src/core/extract/stack.ts`: Heuristic tech stack detection (Next.js, React, Vue/Nuxt, SvelteKit, Angular, Tailwind CSS, Bootstrap, Shadcn/Radix, Laravel, WordPress).
 - `src/core/compile/shared-layout.ts`: Cross-page comparison of header, nav, footer landmarks; extracts into Shared Layout section and replaces page nodes with modular reference.
 - `src/core/compile/markdown.ts`: Generates deterministic, anti-slop `BLUEPRINT.md` with negative constraints, tokens, routes, layouts, and verification checklist.

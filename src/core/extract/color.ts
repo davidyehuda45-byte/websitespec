@@ -75,30 +75,36 @@ export function getEffectiveBackgroundColor(el: Element | null): string {
   return '#FFFFFF';
 }
 
+export interface ColorStats {
+  bgCount: number;
+  textCount: number;
+  borderCount: number;
+  accentCount: number;
+}
+
 /**
- * Clusters and ranks colors by frequency, determining their dominant role.
+ * Clusters and ranks colors by frequency, determining their dominant role from actual usage count.
  */
 export function clusterColorPalette(
-  colorCounts: Map<string, { count: number; roles: Set<'background' | 'text' | 'accent' | 'border'> }>
+  colorCounts: Map<string, ColorStats>
 ): ColorToken[] {
   const result: ColorToken[] = [];
 
-  for (const [hex, data] of colorCounts.entries()) {
+  for (const [hex, stats] of colorCounts.entries()) {
+    const total = stats.bgCount + stats.textCount + stats.borderCount + stats.accentCount;
     let dominantRole: 'background' | 'text' | 'accent' | 'border' = 'accent';
 
-    if (data.roles.has('background') && (hex === '#FFFFFF' || hex === '#000000' || data.count > 10)) {
+    if (stats.bgCount > stats.textCount && stats.bgCount > stats.borderCount) {
       dominantRole = 'background';
-    } else if (data.roles.has('text') && !data.roles.has('background')) {
+    } else if (stats.textCount >= stats.bgCount && stats.textCount >= stats.borderCount && stats.textCount > 0) {
       dominantRole = 'text';
-    } else if (data.roles.has('border') && !data.roles.has('text')) {
+    } else if (stats.borderCount > 0) {
       dominantRole = 'border';
-    } else {
-      dominantRole = 'accent';
     }
 
     result.push({
       hex,
-      count: data.count,
+      count: total,
       role: dominantRole,
     });
   }

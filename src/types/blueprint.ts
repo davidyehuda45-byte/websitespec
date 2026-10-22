@@ -35,6 +35,9 @@ export interface LayoutNode {
   role?: string;
   id?: string;
   semanticClass?: string;
+  ariaLabel?: string;
+  placeholder?: string;
+  href?: string;
   styles: Record<string, string>;
   text?: string;
   children: LayoutNode[];

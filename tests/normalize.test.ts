@@ -31,6 +31,26 @@ describe('CSS Normalization & Anti-Slop', () => {
     });
   });
 
+  it('filters context-incompatible properties (e.g. flex properties on block elements)', () => {
+    const rawStyles = {
+      display: 'block',
+      'flex-direction': 'row',
+      gap: 'normal',
+      'grid-template-columns': 'none',
+      position: 'relative',
+      top: '0px',
+      'box-shadow': 'rgba(0, 0, 0, 0.2) 0px 0px 0px 0px',
+      width: '300px',
+    };
+
+    const cleaned = stripDefaultStyles(rawStyles, false);
+    expect(cleaned).toEqual({
+      display: 'block',
+      position: 'relative',
+      width: '300px',
+    });
+  });
+
   it('preserves root background even if standard', () => {
     const rawStyles = {
       'background-color': '#FFFFFF',
@@ -40,7 +60,7 @@ describe('CSS Normalization & Anti-Slop', () => {
     expect(cleaned['background-color']).toBe('#FFFFFF');
   });
 
-  it('deduplicates repeating sibling structures (e.g. card grid)', () => {
+  it('preserves all sibling structures with full fidelity without lossy collapse', () => {
     const createCard = (title: string): LayoutNode => ({
       tag: 'div',
       styles: { display: 'flex' },
@@ -58,7 +78,8 @@ describe('CSS Normalization & Anti-Slop', () => {
     ];
 
     const deduplicated = deduplicateSiblings(siblings);
-    expect(deduplicated.length).toBe(1);
-    expect(deduplicated[0]?.repeatCount).toBe(4);
+    expect(deduplicated.length).toBe(4);
+    expect(deduplicated[0]?.children[0]?.text).toBe('Card 1');
+    expect(deduplicated[3]?.children[0]?.text).toBe('Card 4');
   });
 });

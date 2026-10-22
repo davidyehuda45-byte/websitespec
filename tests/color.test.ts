@@ -23,11 +23,11 @@ describe('Color Extraction & Clustering', () => {
   });
 
   it('clusters color palette and assigns dominant roles', () => {
-    const counts = new Map<string, { count: number; roles: Set<'background' | 'text' | 'accent' | 'border'> }>();
-    counts.set('#FFFFFF', { count: 45, roles: new Set(['background']) });
-    counts.set('#0F172A', { count: 30, roles: new Set(['text']) });
-    counts.set('#2563EB', { count: 12, roles: new Set(['background', 'accent']) });
-    counts.set('#E2E8F0', { count: 8, roles: new Set(['border']) });
+    const counts = new Map<string, { bgCount: number; textCount: number; borderCount: number; accentCount: number }>();
+    counts.set('#FFFFFF', { bgCount: 45, textCount: 0, borderCount: 0, accentCount: 0 });
+    counts.set('#0F172A', { bgCount: 0, textCount: 30, borderCount: 0, accentCount: 0 });
+    counts.set('#2563EB', { bgCount: 12, textCount: 0, borderCount: 0, accentCount: 5 });
+    counts.set('#E2E8F0', { bgCount: 0, textCount: 0, borderCount: 8, accentCount: 0 });
 
     const palette = clusterColorPalette(counts);
     expect(palette.length).toBe(4);

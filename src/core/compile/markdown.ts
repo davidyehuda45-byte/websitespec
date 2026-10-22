@@ -6,9 +6,10 @@ function formatStyles(styles: Record<string, string>): string {
   return entries.map(([k, v]) => `${k}: ${v}`).join('; ');
 }
 
-function renderLayoutNodeToMarkdown(node: LayoutNode, indentLevel: number = 0, isCompact: boolean = false): string {
+function renderLayoutNodeToMarkdown(node: LayoutNode, indentLevel: number = 0): string {
   const indent = '  '.repeat(indentLevel);
-  const tagDesc = `<${node.tag}${node.id ? ` id="${node.id}"` : ''}${node.semanticClass ? ` class="${node.semanticClass}"` : ''}>`;
+  const hrefAttr = node.href ? ` href="${node.href}"` : '';
+  const tagDesc = `<${node.tag}${node.id ? ` id="${node.id}"` : ''}${node.semanticClass ? ` class="${node.semanticClass}"` : ''}${hrefAttr}>`;
   const repeatDesc = node.repeatCount ? ` [REPEATS x${node.repeatCount}]` : '';
 
   let lines: string[] = [];
@@ -21,38 +22,41 @@ function renderLayoutNodeToMarkdown(node: LayoutNode, indentLevel: number = 0, i
     lines.push(`${indent}  Text: "${safeText}"`);
   }
 
+  if (node.ariaLabel) {
+    lines.push(`${indent}  Aria-Label: "${node.ariaLabel}"`);
+  }
+
+  if (node.placeholder) {
+    lines.push(`${indent}  Placeholder: "${node.placeholder}"`);
+  }
+
   if (node.assets) {
     if (node.assets.type === 'img') {
       lines.push(`${indent}  Asset (Image): src="${node.assets.src}" alt="${node.assets.alt || ''}" [${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px]`);
     } else if (node.assets.type === 'svg') {
       lines.push(`${indent}  Asset (SVG): [${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px]`);
+    } else if (node.assets.type === 'icon') {
+      lines.push(`${indent}  Asset (Icon Font): "${node.assets.alt}"`);
     } else if (node.assets.type === 'bg-image') {
       lines.push(`${indent}  Asset (BG): url="${node.assets.src}"`);
     }
   }
 
-  // Children
-  const maxChildren = isCompact ? 15 : 40;
-  const children = (node.children || []).slice(0, maxChildren);
-  for (const child of children) {
-    lines.push(renderLayoutNodeToMarkdown(child, indentLevel + 1, isCompact));
-  }
-
-  if ((node.children || []).length > maxChildren) {
-    lines.push(`${indent}  ... [${node.children.length - maxChildren} elemen disederhanakan untuk efisiensi token]`);
+  // Render all children with 100% full fidelity (zero truncation)
+  for (const child of node.children || []) {
+    lines.push(renderLayoutNodeToMarkdown(child, indentLevel + 1));
   }
 
   return lines.join('\n');
 }
 
 export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
-  const isCompact = project.outputProfile === 'compact';
   const primaryPage = project.pages[0];
   const domain = project.domain || 'localhost';
 
   let md = `# BLUEPRINT SPESIFIKASI UI: ${domain.toUpperCase()}
 
-Dokumen spesifikasi UI terukur untuk AI coding agent. Seluruh nilai diekstrak langsung dari computed style browser dan DOM aktual.
+Dokumen spesifikasi UI lengkap dan presisi untuk AI coding agent. Seluruh struktur dan styling diekstrak langsung dari computed style browser dan DOM aktual dengan fidelitas penuh (tanpa pemangkasan).
 
 ---
 
@@ -73,7 +77,6 @@ Harap patuhi aturan ketat di bawah ini saat membangun ulang antarmuka:
 - Jumlah Halaman: ${project.pages.length}
 - Target Stack Override: ${project.targetStack || 'Sesuai Stack Asli (Auto-detect)'}
 - Tanggal Ekstraksi: ${project.createdAt}
-- Profil Ekspor: ${project.outputProfile}
 - Viewport Referensi: ${primaryPage?.viewport ? `${primaryPage.viewport.width}x${primaryPage.viewport.height}px` : '1920x1080px'}
 
 ---
@@ -107,7 +110,7 @@ Bangun ulang UI dengan arsitektur yang lazim pada target stack ini.
 ${project.pages
   .map(
     (p, idx) =>
-      `| ${idx + 1} | \`${p.pathname}\` | ${p.title} | ${p.internalLinks.slice(0, 5).join(', ') || '-'} |`
+      `| ${idx + 1} | \`${p.pathname}\` | ${p.title} | ${p.internalLinks.slice(0, 10).join(', ') || '-'} |`
   )
   .join('\n')}
 
@@ -123,7 +126,7 @@ ${
     ? primaryPage.tokens.palette
         .map((c) => `| \`${c.hex}\` | ${c.role} | ${c.count}x |`)
         .join('\n')
-    : '| `#FFFFFF` | background | Dasar |\n| `#111827` | text | Dasar |'
+    : '| `#FFFFFF` | text | Dasar |\n| `#121212` | background | Dasar |'
 }
 
 ### Skala Tipografi
@@ -164,7 +167,7 @@ ${
 ${
   Object.keys(primaryPage?.tokens.cssVariables || {}).length > 0
     ? `### CSS Custom Properties (:root)\n\`\`\`css\n:root {\n${Object.entries(primaryPage?.tokens.cssVariables || {})
-        .slice(0, 30)
+        .slice(0, 50)
         .map(([k, v]) => `  ${k}: ${v};`)
         .join('\n')}\n}\n\`\`\`\n`
     : ''
@@ -179,7 +182,7 @@ ${
     ? project.sharedLayouts
         .map(
           (sl) =>
-            `### Shared [${sl.landmark.toUpperCase()}]\nDigunakan pada halaman: ${sl.presentInPages.map((p) => `\`${p}\``).join(', ')}\n\n${renderLayoutNodeToMarkdown(sl.node, 0, isCompact)}`
+            `### Shared [${sl.landmark.toUpperCase()}]\nDigunakan pada halaman: ${sl.presentInPages.map((p) => `\`${p}\``).join(', ')}\n\n${renderLayoutNodeToMarkdown(sl.node, 0)}`
         )
         .join('\n\n---\n\n')
     : '_Tidak ada komponen bersama yang terdeteksi secara otomatis (halaman tunggal atau struktur berbeda)._'
@@ -197,7 +200,7 @@ ${project.pages
 - Waktu Tangkap: ${page.capturedAt}
 
 #### Pohon Struktur & Layout Komponen:
-${renderLayoutNodeToMarkdown(page.layoutTree, 0, isCompact)}
+${renderLayoutNodeToMarkdown(page.layoutTree, 0)}
 `
   )
   .join('\n\n---\n\n')}
@@ -215,11 +218,15 @@ ${project.pages
       if (node.assets) {
         if (node.assets.type === 'img') {
           assets.push(
-            `| Image | \`${node.assets.src?.slice(0, 60)}...\` | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | ${node.assets.alt || '-'} |`
+            `| Image | \`${node.assets.src?.slice(0, 70)}...\` | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | ${node.assets.alt || '-'} |`
           );
         } else if (node.assets.type === 'svg') {
           assets.push(
             `| Inline SVG | Icon / Graphic | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | Vektor Inline |`
+          );
+        } else if (node.assets.type === 'icon') {
+          assets.push(
+            `| Icon Font | \`${node.assets.alt}\` | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | Kelas Ikon |`
           );
         }
       }
@@ -228,7 +235,7 @@ ${project.pages
     traverse(p.layoutTree);
     return assets;
   })
-  .slice(0, 30)
+  .slice(0, 60)
   .join('\n') || '| - | Tidak ada aset gambar eksternal | - | - |'}
 
 ---

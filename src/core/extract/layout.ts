@@ -47,21 +47,21 @@ function cleanSemanticClass(rawClass: string): string | undefined {
       return true;
     });
 
-  return classes.length > 0 ? classes.slice(0, 3).join(' ') : undefined;
+  return classes.length > 0 ? classes.slice(0, 4).join(' ') : undefined;
 }
 
 /**
  * Checks if an element is visible in the viewport or layout.
+ * Never drops elements with aria-hidden="true" (which icons commonly use).
  */
 function isElementVisible(el: Element, style: CSSStyleDeclaration): boolean {
   if (style.display === 'none') return false;
   if (style.visibility === 'hidden') return false;
   if (style.opacity === '0') return false;
-  if (el.getAttribute('aria-hidden') === 'true') return false;
 
   const rect = el.getBoundingClientRect();
-  // Allow 0-height/width only if it contains visible children
-  if (rect.width === 0 && rect.height === 0 && el.children.length === 0) {
+  // Allow 0-height/width only if it contains children or has text/assets
+  if (rect.width === 0 && rect.height === 0 && el.children.length === 0 && !el.textContent?.trim()) {
     return false;
   }
 
@@ -69,9 +69,9 @@ function isElementVisible(el: Element, style: CSSStyleDeclaration): boolean {
 }
 
 /**
- * Recursively extracts a LayoutNode tree from a DOM element.
+ * Recursively extracts a LayoutNode tree from a DOM element with full depth (up to 20).
  */
-export function extractLayoutNode(el: Element, depth: number = 0, maxDepth: number = 8): LayoutNode | null {
+export function extractLayoutNode(el: Element, depth: number = 0, maxDepth: number = 20): LayoutNode | null {
   if (depth > maxDepth) return null;
 
   const tagName = el.tagName.toLowerCase();
@@ -114,7 +114,7 @@ export function extractLayoutNode(el: Element, depth: number = 0, maxDepth: numb
     }
   }
 
-  // Extract Assets (images, svgs, background images)
+  // Extract Assets (images, svgs, icon fonts, background images)
   const asset = extractAssetsFromElement(el);
 
   // Extract Children
@@ -130,7 +130,19 @@ export function extractLayoutNode(el: Element, depth: number = 0, maxDepth: numb
     }
   }
 
-  // Deduplicate repeating card/grid structures
+  // Fallback text for leaf nodes
+  if (!directText && rawChildren.length === 0) {
+    const allText = el.textContent?.trim() || '';
+    if (allText && allText.length < 160) {
+      directText = allText;
+    }
+  }
+
+  if (tagName === 'canvas') {
+    directText = '[Canvas/WebGL Viewport: Area render grafis interaktif 3D]';
+  }
+
+  // Preserve all children for 100% full fidelity
   const children = deduplicateSiblings(rawChildren);
 
   const node: LayoutNode = {
@@ -146,6 +158,19 @@ export function extractLayoutNode(el: Element, depth: number = 0, maxDepth: numb
   const role = el.getAttribute('role') || undefined;
   if (role) node.role = role;
 
+  const ariaLabel = el.getAttribute('aria-label') || el.getAttribute('title');
+  if (ariaLabel) node.ariaLabel = ariaLabel;
+
+  if (tagName === 'a') {
+    const href = el.getAttribute('href');
+    if (href) node.href = href;
+  }
+
+  if (tagName === 'input') {
+    const ph = (el as HTMLInputElement).placeholder;
+    if (ph) node.placeholder = ph;
+  }
+
   if (directText) node.text = directText;
   if (asset) node.assets = asset;
 
@@ -153,12 +178,11 @@ export function extractLayoutNode(el: Element, depth: number = 0, maxDepth: numb
 }
 
 /**
- * Extracts the primary landmarks or page root.
- * If targetElement is provided (Component Mode), extracts only that element.
+ * Extracts the primary landmarks or page root up to full depth 20.
  */
 export function extractLayoutTree(targetElement?: Element | null): LayoutNode {
   if (targetElement && targetElement !== document.body) {
-    const node = extractLayoutNode(targetElement, 0, 8);
+    const node = extractLayoutNode(targetElement, 0, 20);
     return (
       node || {
         tag: targetElement.tagName.toLowerCase(),
@@ -168,8 +192,8 @@ export function extractLayoutTree(targetElement?: Element | null): LayoutNode {
     );
   }
 
-  // Full Page extraction: start from body
-  const bodyNode = extractLayoutNode(document.body, 0, 8);
+  // Full Page extraction: start from body with full depth
+  const bodyNode = extractLayoutNode(document.body, 0, 20);
   return (
     bodyNode || {
       tag: 'body',
@@ -197,5 +221,5 @@ export function extractInternalLinks(): string[] {
     }
   });
 
-  return Array.from(links).slice(0, 30);
+  return Array.from(links).slice(0, 50);
 }

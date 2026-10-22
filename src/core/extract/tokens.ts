@@ -11,17 +11,16 @@ export function extractDesignTokens(root: Element = document.body): DesignTokens
   const baseSize = bodyStyle.fontSize || htmlStyle.fontSize || '16px';
 
   // 1. Color Frequency Miner
-  const colorCounts = new Map<string, { count: number; roles: Set<'background' | 'text' | 'accent' | 'border'> }>();
+  const colorCounts = new Map<string, { bgCount: number; textCount: number; borderCount: number; accentCount: number }>();
 
   const recordColor = (hex: string | null, role: 'background' | 'text' | 'accent' | 'border') => {
     if (!hex) return;
-    const existing = colorCounts.get(hex);
-    if (existing) {
-      existing.count++;
-      existing.roles.add(role);
-    } else {
-      colorCounts.set(hex, { count: 1, roles: new Set([role]) });
-    }
+    const existing = colorCounts.get(hex) || { bgCount: 0, textCount: 0, borderCount: 0, accentCount: 0 };
+    if (role === 'background') existing.bgCount++;
+    else if (role === 'text') existing.textCount++;
+    else if (role === 'border') existing.borderCount++;
+    else existing.accentCount++;
+    colorCounts.set(hex, existing);
   };
 
   // 2. Scales: Spacing, Radius, Shadow

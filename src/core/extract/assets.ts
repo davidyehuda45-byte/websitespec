@@ -1,5 +1,5 @@
 export interface ExtractedAsset {
-  type: 'img' | 'svg' | 'bg-image';
+  type: 'img' | 'svg' | 'icon' | 'bg-image';
   src?: string;
   alt?: string;
   dimensions?: { width: number; height: number };
@@ -24,15 +24,32 @@ export function extractAssetsFromElement(el: Element): ExtractedAsset | undefine
 
   if (tagName === 'svg') {
     const svg = el as SVGSVGElement;
-    const viewBox = svg.getAttribute('viewBox') || '';
     const width = svg.clientWidth || parseInt(svg.getAttribute('width') || '0', 10);
     const height = svg.clientHeight || parseInt(svg.getAttribute('height') || '0', 10);
 
     return {
       type: 'svg',
       dimensions: { width, height },
-      svgContent: svg.outerHTML.slice(0, 800), // Clip huge paths to prevent token explosion
+      svgContent: svg.outerHTML, // Full SVG content without clipping
     };
+  }
+
+  // Detect Icon fonts (Material Design Icons, FontAwesome, Tabler, Lucide)
+  if (tagName === 'i' || tagName === 'span') {
+    const classList = Array.from(el.classList);
+    const iconClass = classList.find((c) =>
+      /^(mdi-|fa-|fa[srbld]-|lucide-|tabler-|heroicon-|bi-|material-icons)/.test(c)
+    );
+    if (iconClass) {
+      return {
+        type: 'icon',
+        alt: iconClass,
+        dimensions: {
+          width: el.clientWidth,
+          height: el.clientHeight,
+        },
+      };
+    }
   }
 
   const style = window.getComputedStyle(el);
@@ -53,4 +70,3 @@ export function extractAssetsFromElement(el: Element): ExtractedAsset | undefine
 
   return undefined;
 }
-
