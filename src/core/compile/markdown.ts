@@ -8,10 +8,85 @@ import {
   synthesizeComponentContracts,
 } from './prd-synthesizer';
 
+export function resolveTargetStack(project: ProjectBlueprint): string {
+  if (project.targetStack && !project.targetStack.toLowerCase().includes('auto-detect') && project.targetStack.trim() !== '') {
+    return project.targetStack;
+  }
+  const detected = project.pages[0]?.detectedStack || [];
+  const laravel = detected.find((s) => s.name.startsWith('Laravel'));
+  const next = detected.find((s) => s.name === 'Next.js');
+  const vue = detected.find((s) => s.name === 'Vue.js' || s.name === 'Nuxt.js');
+  const svelte = detected.find((s) => s.name.includes('Svelte'));
+  const react = detected.find((s) => s.name === 'React');
+  const tailwind = detected.some((s) => s.name === 'Tailwind CSS');
+
+  if (laravel) return `${laravel.name} + ${tailwind ? 'Tailwind CSS' : 'CSS'}`;
+  if (next) return `Next.js 15 (App Router) + ${tailwind ? 'Tailwind CSS' : 'CSS'}`;
+  if (vue) return `Vue 3 + Vite + ${tailwind ? 'Tailwind CSS' : 'CSS'}`;
+  if (svelte) return `SvelteKit + ${tailwind ? 'Tailwind CSS' : 'CSS'}`;
+  if (react) return `React + Vite + ${tailwind ? 'Tailwind CSS' : 'CSS'}`;
+
+  return tailwind ? 'HTML5 + Tailwind CSS' : 'HTML5 + CSS Murni';
+}
+
+function synthesizeProductOverview(project: ProjectBlueprint): {
+  problemStatement: string;
+  valuePropositions: string[];
+  inScopeFeatures: string[];
+  nonGoals: string[];
+} {
+  const primaryTitle = project.pages[0]?.title || project.domain;
+  const cleanTitle = primaryTitle.split(/[-—|]/)[0]?.trim() || primaryTitle;
+  const allHeadings: string[] = [];
+  const allButtons: string[] = [];
+
+  project.pages.forEach((p) => {
+    const walk = (n: LayoutNode) => {
+      if ((n.tag === 'h1' || n.tag === 'h2') && n.text && n.text.length < 80) {
+        allHeadings.push(n.text.trim());
+      }
+      if ((n.tag === 'button' || n.tag === 'a') && n.text && n.text.length < 40) {
+        allButtons.push(n.text.trim());
+      }
+      (n.children || []).forEach(walk);
+    };
+    walk(p.layoutTree);
+  });
+
+  const valuePropositions: string[] = [];
+  if (allHeadings.length > 0) {
+    valuePropositions.push(`**Penyajian Layanan & Informasi**: Mempublikasikan "${allHeadings[0]}" secara terstruktur dan mudah diakses.`);
+  }
+  if (project.pages.some((p) => p.pathname.includes('login') || p.pathname.includes('auth'))) {
+    valuePropositions.push('**Otentikasi & Gerbang Akses**: Membatasi akses area terproteksi sesuai dengan peran pengguna yang sah.');
+  }
+  if (allButtons.length > 0) {
+    valuePropositions.push(`**Alur Kerja Digital Cepat**: Menyediakan tombol aksi langsung (${allButtons.slice(0, 3).map((b) => `"${b}"`).join(', ')}) untuk mempercepat konversi pengguna.`);
+  }
+  if (valuePropositions.length === 0) {
+    valuePropositions.push(`**Pengalaman Pengguna Responsif**: Menjamin konsistensi visual dan kemudahan navigasi pada domain ${cleanTitle}.`);
+  }
+
+  const inScopeFeatures = project.pages.map((p) => {
+    const shortTitle = p.title ? p.title.split(/[-—|]/)[0]?.trim() : p.pathname;
+    return `Rute \`${p.pathname}\`: Penyajian dan interaksi ${shortTitle}`;
+  });
+
+  return {
+    problemStatement: `Antarmuka web untuk domain ${project.domain} dibangun untuk memfasilitasi kebutuhan pengguna terkait "${cleanTitle}", menyatukan alur navigasi, dan menyajikan informasi secara terorganisir.`,
+    valuePropositions,
+    inScopeFeatures,
+    nonGoals: [
+      'Fitur dan endpoint di luar daftar rute yang teranalisis pada blueprint ini.',
+      'Modifikasi skema warna atau tipografi di luar token sistem desain resmi.',
+    ],
+  };
+}
+
 export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
   const primaryPage = project.pages[0];
   const domain = project.domain || 'localhost';
-  const targetStackName = project.targetStack || 'Modern Frontend Framework';
+  const targetStackName = resolveTargetStack(project);
 
   // Synthesize PRD Artifacts
   const personas = synthesizeUserPersonas(project);
@@ -19,9 +94,10 @@ export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
   const pageSpecs = synthesizePageSpecs(project);
   const componentContracts = synthesizeComponentContracts(project);
   const componentNames = componentContracts.map((c) => c.name);
+  const overview = synthesizeProductOverview(project);
 
   // Dynamic file tree and tailwind theme
-  const fileTree = generateProjectFileTree(project, componentNames);
+  const fileTree = generateProjectFileTree(project, componentNames, targetStackName);
   const tailwindConfig = primaryPage ? generateTailwindThemeConfig(primaryPage.tokens) : '';
 
   // Generate Mermaid User Flow
@@ -40,7 +116,7 @@ export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
   return `# PRODUCT REQUIREMENTS DOCUMENT (PRD) & UI BLUEPRINT
 # SISTEM: ${domain.toUpperCase()}
 
-> Dokumen Spesifikasi Kebutuhan Produk (PRD), Arsitektur Sistem, Model Data, dan Desain Terukur untuk AI Coding Agent (Cursor, Windsurf, Claude Code, Cline). Dihasilkan secara deterministik dari DOM dan computed style aktual.
+> Dokumen Spesifikasi Kebutuhan Produk (PRD), Arsitektur Sistem, Model Data, dan Desain Terukur untuk AI Coding Agent (Cursor, Windsurf, Claude Code, Cline). Dihasilkan secara dinamis dari DOM aktual halaman.
 
 ---
 
@@ -65,20 +141,16 @@ Harap patuhi aturan ketat di bawah ini saat membangun ulang antarmuka:
 - **Viewport Acuan**: ${primaryPage?.viewport ? `${primaryPage.viewport.width}x${primaryPage.viewport.height}px` : '1920x1080px'}
 
 ### 2.2 Problem Statement & Value Proposition
-Aplikasi web ini menyelesaikan tantangan manajemen kegiatan terdistribusi dengan menyediakan:
-1. **Pendaftaran Digital Instan**: Siswa dapat mendaftar kegiatan ekstrakurikuler langsung dari ponsel mereka secara terorganisir tanpa formulir fisik.
-2. **Keamanan Kredensial Sekali Pakai**: Autentikasi berbasis kartu pelajar dengan token 8-digit unik sekali pakai untuk mencegah duplikasi pendaftaran.
-3. **Sentralisasi Informasi Jadwal**: Transparansi jadwal latihan mingguan, lokasi lapangan, dan nama guru pembina bagi seluruh civitas sekolah.
+${overview.problemStatement}
+
+**Nilai Utama Platform (Value Propositions)**:
+${overview.valuePropositions.map((vp) => `- ${vp}`).join('\n')}
 
 ### 2.3 Cakupan Fitur (In-Scope vs Non-Goals)
 - **In-Scope**:
-  - Landing page publik dengan hero section interaktif dan katalog eskul.
-  - Kartu eskul terperinci dengan badge kuota pendaftaran dan jadwal sesi.
-  - Form login multi-peran (Siswa, Pembina / Wali Kelas, Administrator).
-  - Pusat bantuan (FAQ) untuk penanganan kendala token dan NIS.
+${overview.inScopeFeatures.map((f) => `  - ${f}`).join('\n')}
 - **Non-Goals**:
-  - Modul pembayaran tunai/daring (seluruh kegiatan difasilitasi sekolah).
-  - Obrolan (chat) instan antar siswa.
+${overview.nonGoals.map((ng) => `  - ${ng}`).join('\n')}
 
 ---
 

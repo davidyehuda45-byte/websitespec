@@ -1,7 +1,11 @@
 import type { ProjectBlueprint } from '../../types/blueprint';
 
-export function generateProjectFileTree(project: ProjectBlueprint, componentNames: string[] = []): string {
-  const stack = (project.targetStack || '').toLowerCase();
+export function generateProjectFileTree(
+  project: ProjectBlueprint,
+  componentNames: string[] = [],
+  resolvedStackOverride?: string
+): string {
+  const stack = (resolvedStackOverride || project.targetStack || '').toLowerCase();
 
   const extraComponents = componentNames.length > 0 ? componentNames : ['Navbar', 'SearchPill', 'TopControls', 'Sidebar'];
 

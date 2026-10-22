@@ -111,4 +111,29 @@ describe('Markdown PRD Blueprint Compiler', () => {
     // 8. Check Absence of Emojis (Anti-Slop rule)
     expect(markdown).not.toMatch(/[\u{1F300}-\u{1F6FF}]/u);
   });
+
+  it('automatically resolves targetStack to Laravel 11 (Blade) + Tailwind CSS when auto-detect is chosen and Laravel is detected', () => {
+    const mockLaravelPage: any = {
+      pathname: '/',
+      title: 'Portal Siswa',
+      tokens: { palette: [], typography: [], spacingScale: [], radiusScale: [], shadowScale: [] },
+      layoutTree: { tag: 'body', styles: {}, children: [] },
+      internalLinks: [],
+      detectedStack: [
+        { name: 'Laravel (Blade)', category: 'backend-heuristic', confidence: 'high', evidence: 'input[name="_token"] CSRF Blade' },
+        { name: 'Tailwind CSS', category: 'css', confidence: 'high', evidence: 'Tailwind utility classes' },
+      ],
+    };
+
+    const project: any = {
+      domain: 'bagimuextra.sch.id',
+      targetStack: '', // Auto-detect
+      pages: [mockLaravelPage],
+      sharedLayouts: [],
+      createdAt: '22 Oktober 2026',
+    };
+
+    const md = compileBlueprintToMarkdown(project);
+    expect(md).toContain('Laravel (Blade) + Tailwind CSS');
+  });
 });

@@ -198,25 +198,51 @@ export function detectTechStack(): DetectedStack[] {
       });
     }
 
-    // 9. Laravel (Blade / Livewire / Inertia)
-    const isLivewire = safeQuerySelector(document, '[wire\\:id], [wire\\:snapshot]');
-    const isInertia = document.getElementById('app')?.hasAttribute('data-page');
-    const hasCsrf = safeQuerySelector(document, 'meta[name="csrf-token"]');
+    // 9. Alpine.js
+    const hasAlpine = safeQuerySelector(document, '[x-data], [x-init], [x-show], [x-model], [x-cloak]');
+    if (hasAlpine || (window as any).Alpine) {
+      detected.push({
+        name: 'Alpine.js',
+        category: 'library',
+        confidence: 'high',
+        evidence: 'Ditemukan direktif x-data/x-init atau objek window.Alpine',
+      });
+    }
 
-    if (isLivewire || isInertia || hasCsrf) {
+    // 10. Laravel (Blade / Livewire / Inertia)
+    const hasCsrfInput = safeQuerySelector(document, 'input[name="_token"]');
+    const hasMethodInput = safeQuerySelector(document, 'input[name="_method"]');
+    const hasCsrfMeta = safeQuerySelector(document, 'meta[name="csrf-token"]');
+    const hasLaravelCookie =
+      typeof document !== 'undefined' &&
+      typeof document.cookie === 'string' &&
+      (document.cookie.includes('XSRF-TOKEN') || document.cookie.includes('laravel_session'));
+    const isLivewire = safeQuerySelector(document, '[wire\\:id], [wire\\:snapshot], [wire\\:model], [wire\\:click], [wire\\:navigate]');
+    const isInertia = document.getElementById('app')?.hasAttribute('data-page') || safeQuerySelector(document, '[data-page]');
+    const hasLaravelViteAssets = safeQuerySelector(document, 'script[src*="/build/assets/"], link[href*="/build/assets/"]');
+
+    if (hasCsrfInput || hasMethodInput || hasCsrfMeta || hasLaravelCookie || isLivewire || isInertia || (hasAlpine && hasLaravelViteAssets)) {
       let sub = 'Blade';
       if (isLivewire) sub = 'Livewire';
-      if (isInertia) sub = 'Inertia.js';
+      else if (isInertia) sub = 'Inertia.js';
+
+      const evidences: string[] = [];
+      if (hasCsrfInput) evidences.push('input[name="_token"] CSRF Blade');
+      if (hasCsrfMeta) evidences.push('meta csrf-token');
+      if (hasLaravelCookie) evidences.push('cookie XSRF-TOKEN/laravel_session');
+      if (isLivewire) evidences.push('direktif Livewire (wire:id/wire:model)');
+      if (isInertia) evidences.push('container data-page Inertia');
+      if (hasLaravelViteAssets) evidences.push('asset bundle Vite /build/assets/');
 
       detected.push({
         name: `Laravel (${sub})`,
         category: 'backend-heuristic',
-        confidence: isLivewire || isInertia ? 'high' : 'medium',
-        evidence: `Dugaan backend dari front-end: ${isLivewire ? 'wire:id Livewire' : isInertia ? 'Inertia data-page' : 'meta csrf-token'}`,
+        confidence: hasCsrfInput || isLivewire || isInertia || hasLaravelCookie ? 'high' : 'medium',
+        evidence: `Dugaan backend dari front-end: ${evidences.join(', ')}`,
       });
     }
 
-    // 10. WordPress
+    // 11. WordPress
     if (
       html.includes('/wp-content/') ||
       html.includes('/wp-includes/') ||
