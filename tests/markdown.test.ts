@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { compileBlueprintToMarkdown } from '../src/core/compile/markdown';
 import type { ProjectBlueprint, PageBlueprint } from '../src/types/blueprint';
 
-describe('Markdown Blueprint Compiler', () => {
-  it('generates deterministic, anti-slop Markdown with Negative Constraints', () => {
+describe('Markdown PRD Blueprint Compiler', () => {
+  it('generates deterministic, professional PRD without dummy code dumps', () => {
     const mockPage: PageBlueprint = {
       id: 'test-page-1',
       url: 'https://example.com/dashboard',
@@ -80,24 +80,35 @@ describe('Markdown Blueprint Compiler', () => {
 
     const markdown = compileBlueprintToMarkdown(project);
 
-    // 1. Check Negative Constraints
+    // 1. Check Title & Executive Summary
+    expect(markdown).toContain('PRODUCT REQUIREMENTS DOCUMENT (PRD)');
+    expect(markdown).toContain('PRD EXECUTIVE SUMMARY & PRODUCT SCOPE');
+
+    // 2. Check User Personas & Role Matrix
+    expect(markdown).toContain('USER PERSONAS & ROLE-BASED ACCESS CONTROL');
+
+    // 3. Check Mermaid User Flow Diagram
+    expect(markdown).toContain('```mermaid');
+    expect(markdown).toContain('flowchart TD');
+
+    // 4. Check Functional Specs & Acceptance Criteria
+    expect(markdown).toContain('SPESIFIKASI FUNGSIONAL PER HALAMAN & ACCEPTANCE CRITERIA');
+    expect(markdown).toContain('Given');
+    expect(markdown).toContain('When');
+    expect(markdown).toContain('Then');
+
+    // 5. Check Inferred Data Entities
+    expect(markdown).toContain('INFERRED BUSINESS DATA ENTITIES & SCHEMAS');
+
+    // 6. Check Component Architecture Contracts
+    expect(markdown).toContain('SPESIFIKASI ARSITEKTUR KOMPONEN MODULAR');
+    expect(markdown).toContain('Kontrak Props');
+
+    // 7. Check Negative Constraints & Design System
     expect(markdown).toContain('NEGATIVE CONSTRAINTS');
-    expect(markdown).toContain('JANGAN mengimprovisasi warna gradien ungu-biru fantasi');
+    expect(markdown).toContain('DESIGN SYSTEM TOKENS');
 
-    // 2. Check Target Stack Override
-    expect(markdown).toContain('Laravel 11 + Blade + Tailwind CSS');
-
-    // 3. Check Design Tokens
-    expect(markdown).toContain('`#0F172A`');
-    expect(markdown).toContain('`#F8FAFC`');
-    expect(markdown).toContain('`#3B82F6`');
-
-    // 4. Check Layout Tree and Copywriting
-    expect(markdown).toContain('<main>');
-    expect(markdown).toContain('Text: "Welcome back, Admin"');
-
-    // 5. Check Absence of Emojis (Anti-Slop rule)
+    // 8. Check Absence of Emojis (Anti-Slop rule)
     expect(markdown).not.toMatch(/[\u{1F300}-\u{1F6FF}]/u);
   });
 });
-

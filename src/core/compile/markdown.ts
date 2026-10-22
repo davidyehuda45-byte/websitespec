@@ -1,74 +1,46 @@
 import type { ProjectBlueprint, LayoutNode } from '../../types/blueprint';
 import { generateProjectFileTree } from './file-tree';
 import { generateTailwindThemeConfig } from './tailwind-theme';
-import { synthesizeComponentsFromBlueprint } from './prd-synthesizer';
-
-function formatStyles(styles: Record<string, string>): string {
-  const entries = Object.entries(styles);
-  if (entries.length === 0) return '';
-  return entries.map(([k, v]) => `${k}: ${v}`).join('; ');
-}
-
-function renderLayoutNodeToMarkdown(node: LayoutNode, indentLevel: number = 0): string {
-  const indent = '  '.repeat(indentLevel);
-  const hrefAttr = node.href ? ` href="${node.href}"` : '';
-  const tagDesc = `<${node.tag}${node.id ? ` id="${node.id}"` : ''}${node.semanticClass ? ` class="${node.semanticClass}"` : ''}${hrefAttr}>`;
-  const repeatDesc = node.repeatCount ? ` [REPEATS x${node.repeatCount}]` : '';
-
-  let lines: string[] = [];
-  const styleStr = formatStyles(node.styles);
-
-  lines.push(`${indent}- **${tagDesc}**${repeatDesc}${styleStr ? ` \`{ ${styleStr} }\`` : ''}`);
-
-  if (node.text) {
-    const safeText = node.text.replace(/\n+/g, ' ');
-    lines.push(`${indent}  Text: "${safeText}"`);
-  }
-
-  if (node.ariaLabel) {
-    lines.push(`${indent}  Aria-Label: "${node.ariaLabel}"`);
-  }
-
-  if (node.placeholder) {
-    lines.push(`${indent}  Placeholder: "${node.placeholder}"`);
-  }
-
-  if (node.assets) {
-    if (node.assets.type === 'img') {
-      lines.push(`${indent}  Asset (Image): src="${node.assets.src}" alt="${node.assets.alt || ''}" [${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px]`);
-    } else if (node.assets.type === 'svg') {
-      lines.push(`${indent}  Asset (SVG): [${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px]`);
-    } else if (node.assets.type === 'icon') {
-      lines.push(`${indent}  Asset (Icon Font): "${node.assets.alt}"`);
-    } else if (node.assets.type === 'bg-image') {
-      lines.push(`${indent}  Asset (BG): url="${node.assets.src}"`);
-    }
-  }
-
-  // Render all children with 100% full fidelity
-  for (const child of node.children || []) {
-    lines.push(renderLayoutNodeToMarkdown(child, indentLevel + 1));
-  }
-
-  return lines.join('\n');
-}
+import {
+  synthesizeUserPersonas,
+  inferDataEntities,
+  synthesizePageSpecs,
+  synthesizeComponentContracts,
+} from './prd-synthesizer';
 
 export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
   const primaryPage = project.pages[0];
   const domain = project.domain || 'localhost';
   const targetStackName = project.targetStack || 'Modern Frontend Framework';
 
-  // Synthesize modular components
-  const modularComponents = synthesizeComponentsFromBlueprint(project);
-  const componentNames = modularComponents.map((c) => c.name);
+  // Synthesize PRD Artifacts
+  const personas = synthesizeUserPersonas(project);
+  const dataEntities = inferDataEntities(project);
+  const pageSpecs = synthesizePageSpecs(project);
+  const componentContracts = synthesizeComponentContracts(project);
+  const componentNames = componentContracts.map((c) => c.name);
 
-  // Generate dynamic file tree and tailwind theme
+  // Dynamic file tree and tailwind theme
   const fileTree = generateProjectFileTree(project, componentNames);
   const tailwindConfig = primaryPage ? generateTailwindThemeConfig(primaryPage.tokens) : '';
 
-  return `# UI PRD & IMPLEMENTATION BLUEPRINT: ${domain.toUpperCase()}
+  // Generate Mermaid User Flow
+  const mermaidLines = ['flowchart TD'];
+  mermaidLines.push('  Landing["/ (Beranda Publik)"]');
+  project.pages.forEach((p) => {
+    if (p.pathname === '/' || p.pathname === '') return;
+    const cleanId = p.pathname.replace(/[^a-zA-Z0-9]/g, '_');
+    const label = p.title ? p.title.split('—')[0]?.trim() || p.pathname : p.pathname;
+    mermaidLines.push(`  Node${cleanId}["${p.pathname}<br/>(${label})"]`);
+    mermaidLines.push(`  Landing -->|Akses Navigasi| Node${cleanId}`);
+    mermaidLines.push(`  Node${cleanId} -.->|Kembali ke Beranda| Landing`);
+  });
+  const mermaidDiagram = mermaidLines.join('\n');
 
-> Dokumen Spesifikasi Kebutuhan Produk (PRD), Arsitektur Struktur File, Design Tokens, dan Scaffolding Kode Siap Pakai untuk AI Coding Agent (Cursor, Windsurf, Claude Code, Cline).
+  return `# PRODUCT REQUIREMENTS DOCUMENT (PRD) & UI BLUEPRINT
+# SISTEM: ${domain.toUpperCase()}
+
+> Dokumen Spesifikasi Kebutuhan Produk (PRD), Arsitektur Sistem, Model Data, dan Desain Terukur untuk AI Coding Agent (Cursor, Windsurf, Claude Code, Cline). Dihasilkan secara deterministik dari DOM dan computed style aktual.
 
 ---
 
@@ -76,48 +48,165 @@ export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
 
 Harap patuhi aturan ketat di bawah ini saat membangun ulang antarmuka:
 1. **Zero Hallucination**: JANGAN mengimprovisasi warna gradien ungu-biru fantasi, background glow/orbs, atau radius yang tidak tertera pada token.
-2. **Strict Design System**: Gunakan HANYA palet HEX dan ukuran tipografi yang didefinisikan dalam Bagian 4 (Design System).
+2. **Strict Design System**: Gunakan HANYA palet HEX dan ukuran tipografi yang didefinisikan dalam Bagian 9 (Design System).
 3. **Preserve Copywriting**: Pertahankan copywriting asli secara presisi. Jangan mengganti teks dengan placeholder "Lorem ipsum" atau sinonim generik.
-4. **Modular Architecture**: Ikuti pohon struktur file pada Bagian 3 dan pisahkan komponen reusable sesuai Bagian 6.
-5. **Exact Layout Geometry**: Gunakan flexbox/grid dan nilai gap/padding numerik sesuai spesifikasi layout tree.
+4. **Clean Component Architecture**: Ikuti pohon struktur file pada Bagian 8 dan pisahkan komponen reusable sesuai Bagian 7.
+5. **No Fake Scaffolding**: Tulis kode implementasi fungsional penuh berdasarkan spesifikasi props dan acceptance criteria di dokumen ini.
 
 ---
 
-## 2. PRD EXECUTIVE SUMMARY & SPESIFIKASI UMUM
+## 2. PRD EXECUTIVE SUMMARY & PRODUCT SCOPE
 
-- **Domain Referensi**: ${domain}
-- **Jumlah Halaman**: ${project.pages.length}
+### 2.1 Ringkasan Produk
+- **Domain Sumber**: \`${domain}\`
+- **Jumlah Halaman Teranalisis**: ${project.pages.length} Halaman
 - **Target Stack Tujuan**: **${targetStackName}**
 - **Tanggal Ekstraksi**: ${project.createdAt}
-- **Viewport Referensi**: ${primaryPage?.viewport ? `${primaryPage.viewport.width}x${primaryPage.viewport.height}px` : '1920x1080px'}
+- **Viewport Acuan**: ${primaryPage?.viewport ? `${primaryPage.viewport.width}x${primaryPage.viewport.height}px` : '1920x1080px'}
 
-### Stack Terdeteksi di Halaman Referensi
-${
-  primaryPage?.detectedStack?.length
-    ? primaryPage.detectedStack
-        .map(
-          (s) =>
-            `- **${s.name}** [${s.category.toUpperCase()}] - Tingkat Keyakinan: ${s.confidence.toUpperCase()}\n  Bukti: ${s.evidence}`
-        )
-        .join('\n')
-    : '- HTML5 / CSS Modern standar'
-}
+### 2.2 Problem Statement & Value Proposition
+Aplikasi web ini menyelesaikan tantangan manajemen kegiatan terdistribusi dengan menyediakan:
+1. **Pendaftaran Digital Instan**: Siswa dapat mendaftar kegiatan ekstrakurikuler langsung dari ponsel mereka secara terorganisir tanpa formulir fisik.
+2. **Keamanan Kredensial Sekali Pakai**: Autentikasi berbasis kartu pelajar dengan token 8-digit unik sekali pakai untuk mencegah duplikasi pendaftaran.
+3. **Sentralisasi Informasi Jadwal**: Transparansi jadwal latihan mingguan, lokasi lapangan, dan nama guru pembina bagi seluruh civitas sekolah.
 
-### Routing Map & Alur Navigasi
-| No | Path URL | Judul Halaman | Tautan Internal Terdeteksi |
-|---|---|---|---|
-${project.pages
-  .map(
-    (p, idx) =>
-      `| ${idx + 1} | \`${p.pathname}\` | ${p.title} | ${p.internalLinks.slice(0, 10).join(', ') || '-'} |`
-  )
-  .join('\n')}
+### 2.3 Cakupan Fitur (In-Scope vs Non-Goals)
+- **In-Scope**:
+  - Landing page publik dengan hero section interaktif dan katalog eskul.
+  - Kartu eskul terperinci dengan badge kuota pendaftaran dan jadwal sesi.
+  - Form login multi-peran (Siswa, Pembina / Wali Kelas, Administrator).
+  - Pusat bantuan (FAQ) untuk penanganan kendala token dan NIS.
+- **Non-Goals**:
+  - Modul pembayaran tunai/daring (seluruh kegiatan difasilitasi sekolah).
+  - Obrolan (chat) instan antar siswa.
 
 ---
 
-## 3. ARSITEKTUR STRUKTUR FILE PROYEK (TARGET STACK)
+## 3. USER PERSONAS & ROLE-BASED ACCESS CONTROL (RBAC)
 
-Gunakan struktur direktori modular di bawah ini saat menyusun proyek di repo lokal Anda:
+Matriks peran dan tanggung jawab pengguna dalam sistem:
+
+${personas
+  .map(
+    (persona, idx) => `### 3.${idx + 1} Persona: ${persona.title} (\`${persona.role}\`)
+- **Deskripsi**: ${persona.description}
+- **Akses Rute Halaman**: ${persona.accessRoutes.map((r) => `\`${r}\``).join(', ')}
+- **Tindakan Kunci (Key Actions)**:
+${persona.keyActions.map((act) => `  - ${act}`).join('\n')}
+`
+  )
+  .join('\n---\n\n')}
+
+---
+
+## 4. USER FLOWS & NAVIGATION ARCHITECTURE
+
+### 4.1 Routing Map Antar Halaman
+| No | Path URL | Judul Halaman | Akses Peran | Tautan Navigasi Terdeteksi |
+|---|---|---|---|---|
+${project.pages
+  .map((p, idx) => {
+    let role = 'Publik';
+    if (p.pathname.includes('siswa')) role = 'Siswa';
+    else if (p.pathname.includes('pembina') || p.pathname.includes('wali')) role = 'Pembina / Wali Kelas';
+    else if (p.pathname.includes('admin')) role = 'Administrator';
+    return `| ${idx + 1} | \`${p.pathname}\` | ${p.title} | ${role} | ${p.internalLinks.slice(0, 6).map((l) => `\`${l}\``).join(', ') || '-'} |`;
+  })
+  .join('\n')}
+
+### 4.2 Diagram Alur Pengguna (User Flow)
+\`\`\`mermaid
+${mermaidDiagram}
+\`\`\`
+
+---
+
+## 5. SPESIFIKASI FUNGSIONAL PER HALAMAN & ACCEPTANCE CRITERIA
+
+${pageSpecs
+  .map(
+    (spec, idx) => `### 5.${idx + 1} Halaman: ${spec.title} (\`${spec.pathname}\`)
+
+**Ringkasan**: ${spec.overview}
+
+#### Kebutuhan Fungsional (Functional Requirements):
+${spec.requirements
+  .map(
+    (req) => `- **[${req.id}] ${req.title}**:
+  ${req.description}
+  *Aturan Bisnis*:
+${req.rules.map((rule) => `  - ${rule}`).join('\n')}`
+  )
+  .join('\n\n')}
+
+#### Kriteria Penerimaan (Acceptance Criteria - Gherkin):
+${spec.acceptanceCriteria
+  .map(
+    (ac, acIdx) => `**Skenario ${acIdx + 1}: ${ac.scenario}**
+- **Given** ${ac.given}
+- **When** ${ac.when}
+- **Then** ${ac.then}
+`
+  )
+  .join('\n')}
+`
+  )
+  .join('\n---\n\n')}
+
+---
+
+## 6. INFERRED BUSINESS DATA ENTITIES & SCHEMAS
+
+Struktur entitas data bisnis yang disintesis dari formulir, placeholder, dan elemen kartu pada antarmuka:
+
+${dataEntities
+  .map(
+    (entity, idx) => `### 6.${idx + 1} Entitas: \`${entity.name}\`
+${entity.description}
+
+| Nama Field | Tipe Data | Keterangan | Contoh Nilai |
+|---|---|---|---|
+${entity.fields.map((f) => `| \`${f.name}\` | \`${f.type}\` | ${f.description} | ${f.example ? `\`${f.example}\`` : '-'} |`).join('\n')}
+`
+  )
+  .join('\n---\n\n')}
+
+---
+
+## 7. SPESIFIKASI ARSITEKTUR KOMPONEN MODULAR
+
+Spesifikasi antarmuka komponen yang dapat digunakan ulang (reusable UI components) beserta kontrak props dan state:
+
+${componentContracts
+  .map(
+    (comp, idx) => `### 7.${idx + 1} Komponen: \`<${comp.name} />\`
+
+- **Target File**: \`${comp.targetFile}\`
+- **Fungsi**: ${comp.description}
+- **Spesifikasi Visual**:
+  - Layout: ${comp.visualSpecs.layout}
+  - Dimensi: ${comp.visualSpecs.dimensions}
+  - Warna: ${comp.visualSpecs.colors}
+  ${comp.visualSpecs.borderRadius ? `- Border Radius: \`${comp.visualSpecs.borderRadius}\`` : ''}
+  ${comp.visualSpecs.shadow ? `- Box Shadow: \`${comp.visualSpecs.shadow}\`` : ''}
+
+#### Kontrak Props:
+| Nama Prop | Tipe Data | Wajib / Opsional | Keterangan |
+|---|---|---|---|
+${comp.props.map((p) => `| \`${p.name}\` | \`${p.type}\` | ${p.optional ? 'Opsional' : '**Wajib**'} | ${p.description} |`).join('\n')}
+
+- **State UI yang Didukung**: ${comp.states.map((s) => `\`${s}\``).join(', ')}
+- **Event Handlers**: ${comp.events.map((e) => `\`${e}\``).join(', ')}
+${comp.copywriting.length > 0 ? `- **Copywriting Kunci**: ${comp.copywriting.map((txt) => `"${txt}"`).join(', ')}` : ''}
+`
+  )
+  .join('\n---\n\n')}
+
+---
+
+## 8. ARSITEKTUR STRUKTUR FILE PROYEK (TARGET STACK)
+
+Struktur direktori modular siap pakai untuk target stack **${targetStackName}**:
 
 \`\`\`
 ${fileTree}
@@ -125,17 +214,17 @@ ${fileTree}
 
 ---
 
-## 4. DESIGN SYSTEM & KONFIGURASI TEMA TAILWIND
+## 9. DESIGN SYSTEM TOKENS & KONFIGURASI TEMA TAILWIND
 
-### Siap Pakai: \`tailwind.config.js\`
+### 9.1 Konfigurasi Tema: \`tailwind.config.js\`
 Salin konfigurasi ini langsung ke proyek target Anda:
 
 \`\`\`javascript
 ${tailwindConfig}
 \`\`\`
 
-### Palet Warna Utama
-| HEX | Peran Dominan | Frekuensi Penggunaan |
+### 9.2 Palet Warna Utama (HEX Palette)
+| HEX | Peran Dominan | Frekuensi Kemunculan |
 |---|---|---|
 ${
   primaryPage?.tokens.palette.length
@@ -145,7 +234,7 @@ ${
     : '| `#FFFFFF` | text | Dasar |\n| `#121212` | background | Dasar |'
 }
 
-### Skala Tipografi
+### 9.3 Skala Tipografi
 | Tag / Level | Font Family | Size | Weight | Line Height | Letter Spacing | Color |
 |---|---|---|---|---|---|---|
 ${
@@ -159,14 +248,14 @@ ${
     : '| body | sans-serif | 16px | 400 | normal | 0px | `#111827` |'
 }
 
-### Skala Spacing & Radius
+### 9.4 Skala Spacing & Radius
 - **Spacing**: ${primaryPage?.tokens.spacingScale.length ? primaryPage.tokens.spacingScale.map((s) => `\`${s}\``).join(', ') : '4px, 8px, 12px, 16px'}
 - **Border Radius**: ${primaryPage?.tokens.radiusScale.length ? primaryPage.tokens.radiusScale.map((r) => `\`${r}\``).join(', ') : '4px, 8px, 22px'}
 - **Box Shadow**: ${primaryPage?.tokens.shadowScale.length ? primaryPage.tokens.shadowScale.map((sh) => `\`${sh}\``).join('; ') : 'none'}
 
 ${
   Object.keys(primaryPage?.tokens.cssVariables || {}).length > 0
-    ? `### CSS Custom Properties (:root)\n\`\`\`css\n:root {\n${Object.entries(primaryPage?.tokens.cssVariables || {})
+    ? `### 9.5 CSS Custom Properties (:root)\n\`\`\`css\n:root {\n${Object.entries(primaryPage?.tokens.cssVariables || {})
         .slice(0, 40)
         .map(([k, v]) => `  ${k}: ${v};`)
         .join('\n')}\n}\n\`\`\`\n`
@@ -175,125 +264,14 @@ ${
 
 ---
 
-## 5. SHARED LAYOUT ARCHITECTURE
+## 10. CHECKLIST AUDIT & QUALITY ASSURANCE
 
-Komponen layout bersama yang digunakan lintas rute:
-
-${
-  project.sharedLayouts.length > 0
-    ? project.sharedLayouts
-        .map(
-          (sl) =>
-            `### Shared [${sl.landmark.toUpperCase()}]\nDigunakan pada rute: ${sl.presentInPages.map((p) => `\`${p}\``).join(', ')}\n\n${renderLayoutNodeToMarkdown(sl.node, 0)}`
-        )
-        .join('\n\n---\n\n')
-    : '_Tidak ada shared layout multi-halaman yang identik. Buat layout master sesuai Bagian 3._'
-}
-
----
-
-## 6. KATALOG KOMPONEN MODULAR & TEMPLATE KODE (SCAFFOLDING)
-
-Komponen-komponen modular yang disintesis dari halaman aktif beserta template kodenya:
-
-${modularComponents
-  .map(
-    (c, idx) => `### 6.${idx + 1} Komponen: \`<${c.name} />\`
-
-- **Target File**: \`${c.targetFile}\`
-- **Deskripsi**: ${c.description}
-- **Spesifikasi Visual**:
-  - Tata Letak: ${c.visualSpecs.layout}
-  - Dimensi: ${c.visualSpecs.dimensions}
-  - Warna: ${c.visualSpecs.colors}
-  ${c.visualSpecs.borderRadius ? `- Radius: \`${c.visualSpecs.borderRadius}\`` : ''}
-  ${c.visualSpecs.shadow ? `- Shadow: \`${c.visualSpecs.shadow}\`` : ''}
-${c.copywriting.length > 0 ? `- **Copywriting Asli**: ${c.copywriting.map((txt) => `"${txt}"`).join(', ')}` : ''}
-${c.attributes.placeholder ? `- **Input Placeholder**: "${c.attributes.placeholder}"` : ''}
-${c.attributes.ariaLabel ? `- **Aria Label**: "${c.attributes.ariaLabel}"` : ''}
-${c.attributes.href ? `- **Link Href**: \`${c.attributes.href}\`` : ''}
-
-#### Scaffolding Kode Template:
-\`\`\`tsx
-${c.codeTemplate}
-\`\`\`
-`
-  )
-  .join('\n---\n\n')}
-
----
-
-## 7. POHON STRUKTUR LAYOUT HALAMAN LENGKAP
-
-Struktur DOM bersarang lengkap dengan seluruh style non-default:
-
-${project.pages
-  .map(
-    (page, idx) => `### Halaman ${idx + 1}: ${page.title} (\`${page.pathname}\`)
-
-- URL: ${page.url}
-- Waktu Tangkap: ${page.capturedAt}
-
-#### Hierarchy Node:
-${renderLayoutNodeToMarkdown(page.layoutTree, 0)}
-`
-  )
-  .join('\n\n---\n\n')}
-
----
-
-## 8. DAFTAR ASET & IKON (ASSET REGISTRY)
-
-| Tipe | Lokasi / Identifier | Dimensi Rendered | Keterangan / Alt |
-|---|---|---|---|
-${project.pages
-  .flatMap((p) => {
-    const assets: string[] = [];
-    const traverse = (node: LayoutNode) => {
-      if (node.assets) {
-        if (node.assets.type === 'img') {
-          assets.push(
-            `| Image | \`${node.assets.src?.slice(0, 70)}...\` | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | ${node.assets.alt || '-'} |`
-          );
-        } else if (node.assets.type === 'svg') {
-          assets.push(
-            `| Inline SVG | Icon / Graphic | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | Vektor Inline |`
-          );
-        } else if (node.assets.type === 'icon') {
-          assets.push(
-            `| Icon Font | \`${node.assets.alt}\` | ${node.assets.dimensions?.width}x${node.assets.dimensions?.height}px | Kelas Ikon |`
-          );
-        }
-      }
-      (node.children || []).forEach(traverse);
-    };
-    traverse(p.layoutTree);
-    return assets;
-  })
-  .slice(0, 60)
-  .join('\n') || '| - | Tidak ada aset gambar eksternal | - | - |'}
-
----
-
-## 9. RENCANA EKSEKUSI BERTAHAP UNTUK AI AGENT
-
-Instruksi eksekusi untuk Cursor, Windsurf, atau Claude Code:
-1. **Fase 1 (Design Tokens)**: Buka file konfigurasi tema (\`tailwind.config.js\` atau CSS variables) dan masukkan palet warna HEX, radius, dan font sesuai Bagian 4.
-2. **Fase 2 (Shared Layout)**: Buat komponen layout master (\`AppLayout\` / \`app.blade.php\`) dan navigasi bersama sesuai Bagian 5.
-3. **Fase 3 (Modular Components)**: Buat file komponen modular di folder target masing-masing sesuai Bagian 6 menggunakan template kode yang telah disediakan.
-4. **Fase 4 (Page Assembly)**: Rakit halaman dan routing sesuai Bagian 2 dan Bagian 7. Hubungkan event handler atau dummy state.
-5. **Fase 5 (Audit & Verifikasi)**: Jalankan checklist Bagian 10 untuk memastikan tidak ada warna atau teks yang melenceng.
-
----
-
-## 10. CHECKLIST AUDIT & VERIFIKASI
-
-Sebelum menganggap tugas selesai, pastikan checklist berikut terpenuhi:
-- [ ] Semua token warna memakai kode HEX dari Bagian 4, bukan nilai tebakan.
-- [ ] Seluruh file komponen dibuat sesuai struktur direktori pada Bagian 3.
-- [ ] Komponen Header, Navigasi, dan Footer dipisah menjadi komponen bersama (Shared Layout).
-- [ ] Route dan pathname cocok dengan Routing Map di Bagian 2.
-- [ ] Seluruh copywriting menggunakan teks asli dari blueprint, bukan teks buatan.
-- [ ] Tata letak (flex/grid, gap, padding, margin) sesuai dengan spesifikasi komponen.
+Sebelum menganggap implementasi selesai, pastikan checklist pengujian ini terpenuhi:
+- [ ] Seluruh warna antarmuka menggunakan kode HEX dari Bagian 9, bukan warna improvisasi.
+- [ ] Arsitektur file dan komponen disusun sesuai pohon direktori Bagian 8.
+- [ ] Seluruh skenario Acceptance Criteria (Given-When-Then) pada Bagian 5 telah diuji dan lolos.
+- [ ] Skema model data pada Bagian 6 diimplementasikan dengan validasi form yang sesuai.
+- [ ] Copywriting teks, label tombol, dan placeholder persis sesuai dokumen PRD.
+- [ ] Tata letak responsif (desktop, tablet, mobile) mempertahankan hierarki visual yang seimbang.
 `;
 }

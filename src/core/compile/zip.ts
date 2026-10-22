@@ -2,16 +2,17 @@ import JSZip from 'jszip';
 import type { ProjectBlueprint, LayoutNode } from '../../types/blueprint';
 import { compileBlueprintToMarkdown } from './markdown';
 import { generateTailwindThemeConfig } from './tailwind-theme';
-import { synthesizeComponentsFromBlueprint } from './prd-synthesizer';
+import { synthesizeComponentContracts } from './prd-synthesizer';
 
 export async function compileBlueprintToZip(project: ProjectBlueprint): Promise<Blob> {
   const zip = new JSZip();
 
-  // 1. BLUEPRINT.md (Comprehensive PRD & Architecture Blueprint)
+  // 1. PRD.md (Comprehensive Product Requirements Document & Architecture Blueprint)
   const markdown = compileBlueprintToMarkdown(project);
+  zip.file('PRD.md', markdown);
   zip.file('BLUEPRINT.md', markdown);
 
-  // 2. tailwind.config.js
+  // 2. tailwind.config.js & tokens.json
   const primaryPage = project.pages[0];
   if (primaryPage) {
     const tailwindConfig = generateTailwindThemeConfig(primaryPage.tokens);
@@ -19,33 +20,29 @@ export async function compileBlueprintToZip(project: ProjectBlueprint): Promise<
     zip.file('tokens.json', JSON.stringify(primaryPage.tokens, null, 2));
   }
 
-  // 3. scaffolding/ folder with ready-to-run component templates
-  const modularComponents = synthesizeComponentsFromBlueprint(project);
-  const scaffoldingFolder = zip.folder('scaffolding');
-  if (scaffoldingFolder) {
-    modularComponents.forEach((comp) => {
-      // e.g. "components/ui/SearchPill.tsx" -> filename "SearchPill.tsx"
-      const simpleName = comp.targetFile.split('/').pop() || `${comp.name}.tsx`;
-      scaffoldingFolder.file(simpleName, comp.codeTemplate);
-    });
-  }
+  // 3. AGENTS.md (Quick instruction prompt for Cursor / Claude Code)
+  const componentContracts = synthesizeComponentContracts(project);
+  const agentsPrompt = `# AI Agent Execution Guide
+## System: ${project.domain}
+## Target Stack: ${project.targetStack || 'Modern Frontend Framework'}
 
-  // 4. AGENTS.md (Quick instruction prompt for Cursor / Claude Code)
-  const agentsPrompt = `# AI Agent Instruction Prompt
+You are tasked with implementing the UI and functionality for **${project.domain}** according to \`PRD.md\`.
 
-You are tasked with cloning the UI for **${project.domain}**.
-Target Stack: **${project.targetStack || 'Modern Frontend'}**
-
-Follow \`BLUEPRINT.md\` carefully:
-1. Review the Project File Tree in Section 3 and place files accordingly.
-2. Drop \`tailwind.config.js\` into your project root.
-3. Check the \`scaffolding/\` folder in this zip for starter component templates.
-4. Strictly follow the Negative Constraints in Section 1 (no hallucinated gradients or placeholder copy).
-5. Implement the modular components in Section 6 and assemble the pages in Section 7.
+### Execution Order:
+1. Review the **Executive Summary & Scope** in Section 2.
+2. Align with the **User Personas & Role Matrix** in Section 3.
+3. Follow the **User Flows (Mermaid)** in Section 4.
+4. Implement each page according to **Functional Requirements & Acceptance Criteria** in Section 5.
+5. Model your state/database schemas using **Inferred Business Data Entities** in Section 6.
+6. Build the modular components according to the **Component Architecture & Props Contracts** in Section 7:
+${componentContracts.map((c) => `   - \`<${c.name} />\` -> \`${c.targetFile}\``).join('\n')}
+7. Adopt the directory layout in Section 8 and apply the \`tailwind.config.js\` from Section 9.
+8. Strictly follow the Negative Constraints in Section 1 (no phantom purple/blue gradients or placeholder copy).
+9. Verify all Acceptance Criteria using the checklist in Section 10.
 `;
   zip.file('AGENTS.md', agentsPrompt);
 
-  // 5. assets/ folder (SVGs)
+  // 4. assets/ folder (SVGs)
   const assetsFolder = zip.folder('assets');
   if (assetsFolder) {
     let svgIndex = 1;
