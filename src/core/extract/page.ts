@@ -4,25 +4,26 @@ import { extractLayoutTree, extractInternalLinks } from './layout';
 import { detectTechStack } from './stack';
 
 export function extractPageBlueprint(targetElement?: Element | null): PageBlueprint {
-  const tokens = extractDesignTokens(targetElement || document.body);
+  const root = targetElement || document.body || document.documentElement;
+  const tokens = extractDesignTokens(root);
   const layoutTree = extractLayoutTree(targetElement);
   const detectedStack = detectTechStack();
   const internalLinks = extractInternalLinks();
 
   const isComponentMode = Boolean(targetElement && targetElement !== document.body);
   const title = isComponentMode
-    ? `Component <${targetElement?.tagName.toLowerCase()}> on ${document.title || 'Untitled'}`
+    ? `Component <${(targetElement?.tagName || 'element').toLowerCase()}> on ${document.title || 'Untitled'}`
     : document.title || 'Untitled Page';
 
   return {
     id: `${window.location.pathname}_${Date.now()}`,
     url: window.location.href,
-    pathname: window.location.pathname,
+    pathname: window.location.pathname || '/',
     title,
     capturedAt: new Date().toISOString(),
     viewport: {
-      width: window.innerWidth,
-      height: window.innerHeight,
+      width: window.innerWidth || 1920,
+      height: window.innerHeight || 1080,
     },
     detectedStack,
     tokens,
@@ -30,4 +31,3 @@ export function extractPageBlueprint(targetElement?: Element | null): PageBluepr
     internalLinks,
   };
 }
-

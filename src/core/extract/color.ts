@@ -1,11 +1,12 @@
 import type { ColorToken } from '../../types/blueprint';
+import { safeTrim, safeGetComputedStyle, safeGetPropertyValue } from '../utils/dom-safe';
 
 /**
  * Converts any CSS color string (rgb, rgba, hsl, named, hex) to uppercase HEX format.
  */
-export function cssColorToHex(colorStr: string): string | null {
-  if (!colorStr) return null;
-  const str = colorStr.trim().toLowerCase();
+export function cssColorToHex(colorStr: any): string | null {
+  const str = safeTrim(colorStr).toLowerCase();
+  if (!str) return null;
 
   if (str === 'transparent' || str === 'rgba(0, 0, 0, 0)' || str === 'rgba(0,0,0,0)') {
     return null;
@@ -64,11 +65,13 @@ export function cssColorToHex(colorStr: string): string | null {
 export function getEffectiveBackgroundColor(el: Element | null): string {
   let curr: Element | null = el;
   while (curr && curr !== document.documentElement) {
-    const style = window.getComputedStyle(curr);
-    const bg = style.backgroundColor;
-    const hex = cssColorToHex(bg);
-    if (hex && !hex.endsWith('00')) {
-      return hex;
+    const style = safeGetComputedStyle(curr);
+    if (style) {
+      const bg = safeGetPropertyValue(style, 'background-color');
+      const hex = cssColorToHex(bg);
+      if (hex && !hex.endsWith('00')) {
+        return hex;
+      }
     }
     curr = curr.parentElement;
   }

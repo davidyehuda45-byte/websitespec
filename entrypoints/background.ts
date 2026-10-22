@@ -1,5 +1,5 @@
 import { savePageToCart, clearCart, buildProjectBlueprint, getCartPages, updateBadge } from '../src/core/storage/cart';
-import { injectContentScript } from '../src/core/utils/inject';
+import { ensureContentScriptReady } from '../src/core/utils/inject';
 import { compileBlueprintToMarkdown } from '../src/core/compile/markdown';
 import { compileBlueprintToZip } from '../src/core/compile/zip';
 
@@ -79,14 +79,8 @@ export default defineBackground(() => {
       const b = (globalThis as any).browser || (globalThis as any).chrome;
 
       try {
-        let response;
-        try {
-          response = await b.tabs.sendMessage(tab.id, { type: actionType });
-        } catch {
-          await injectContentScript(tab.id);
-          await new Promise((r) => setTimeout(r, 250));
-          response = await b.tabs.sendMessage(tab.id, { type: actionType });
-        }
+        await ensureContentScriptReady(tab.id);
+        const response = await b.tabs.sendMessage(tab.id, { type: actionType });
 
         if (response && response.success && response.blueprint) {
           await savePageToCart(response.blueprint);

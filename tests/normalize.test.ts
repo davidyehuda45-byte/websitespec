@@ -9,6 +9,8 @@ describe('CSS Normalization & Anti-Slop', () => {
     expect(normalizeShorthand('10px 20px 10px 20px')).toBe('10px 20px');
     expect(normalizeShorthand('10px 15px 20px 15px')).toBe('10px 15px 20px');
     expect(normalizeShorthand('10px 20px 30px 40px')).toBe('10px 20px 30px 40px');
+    expect(normalizeShorthand(null as any)).toBe('');
+    expect(normalizeShorthand(undefined as any)).toBe('');
   });
 
   it('strips standard browser default styles', () => {

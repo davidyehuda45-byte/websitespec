@@ -23,7 +23,7 @@ import {
   buildProjectBlueprint,
   savePageToCart,
 } from '../../src/core/storage/cart';
-import { injectContentScript } from '../../src/core/utils/inject';
+import { ensureContentScriptReady } from '../../src/core/utils/inject';
 import { compileBlueprintToMarkdown } from '../../src/core/compile/markdown';
 import { compileBlueprintToZip } from '../../src/core/compile/zip';
 import './App.css';
@@ -113,21 +113,14 @@ export default function App() {
         return;
       }
 
+      await ensureContentScriptReady(tab.id);
       let response;
       try {
         response = await b.tabs.sendMessage(tab.id, { type: 'EXTRACT_PAGE' });
-      } catch (err1) {
-        console.warn('Percobaan pertama sendMessage gagal, mencoba injeksi skrip...', err1);
-        // Tab opened before extension load: inject on-demand and retry
-        await injectContentScript(tab.id);
-        await new Promise((r) => setTimeout(r, 300));
-        try {
-          response = await b.tabs.sendMessage(tab.id, { type: 'EXTRACT_PAGE' });
-        } catch (err2: any) {
-          console.error('Percobaan kedua sendMessage gagal:', err2);
-          setStatusMessage('Gagal komunikasi: ' + (err2?.message || String(err2)));
-          return;
-        }
+      } catch (err2: any) {
+        console.error('Komunikasi dengan tab gagal:', err2);
+        setStatusMessage('Gagal komunikasi: ' + (err2?.message || String(err2)));
+        return;
       }
 
       if (response && response.success && response.blueprint) {

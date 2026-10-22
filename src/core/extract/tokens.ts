@@ -1,14 +1,27 @@
 import type { DesignTokens, TypographyToken } from '../../types/blueprint';
 import { cssColorToHex, clusterColorPalette, getEffectiveBackgroundColor } from './color';
+import {
+  safeTrim,
+  safeGetComputedStyle,
+  safeGetPropertyValue,
+  safeQuerySelector,
+  safeQuerySelectorAll,
+  safeGetAttribute,
+} from '../utils/dom-safe';
 
 export function extractDesignTokens(root: Element = document.body): DesignTokens {
-  const bodyStyle = window.getComputedStyle(document.body);
-  const htmlStyle = window.getComputedStyle(document.documentElement);
+  const safeRoot = root || document.body || document.documentElement;
+  const bodyStyle = safeGetComputedStyle(safeRoot);
+  const htmlStyle = safeGetComputedStyle(document.documentElement);
 
-  const effectiveBg = getEffectiveBackgroundColor(document.body);
-  const bodyText = cssColorToHex(bodyStyle.color) || '#111827';
-  const baseFont = (bodyStyle.fontFamily.split(',')[0] || '').replace(/['"]/g, '').trim() || 'sans-serif';
-  const baseSize = bodyStyle.fontSize || htmlStyle.fontSize || '16px';
+  const effectiveBg = getEffectiveBackgroundColor(safeRoot);
+  const bodyText = cssColorToHex(bodyStyle ? safeGetPropertyValue(bodyStyle, 'color') : '#111827') || '#111827';
+  
+  const rawBodyFont = bodyStyle ? safeGetPropertyValue(bodyStyle, 'font-family') : '';
+  const baseFont = safeTrim(rawBodyFont.split(',')[0]?.replace(/['"]/g, '')) || 'sans-serif';
+  const baseSize = (bodyStyle ? safeGetPropertyValue(bodyStyle, 'font-size') : '') ||
+    (htmlStyle ? safeGetPropertyValue(htmlStyle, 'font-size') : '') ||
+    '16px';
 
   // 1. Color Frequency Miner
   const colorCounts = new Map<string, { bgCount: number; textCount: number; borderCount: number; accentCount: number }>();
@@ -28,39 +41,52 @@ export function extractDesignTokens(root: Element = document.body): DesignTokens
   const radiusFreq = new Map<string, number>();
   const shadowFreq = new Map<string, number>();
 
-  const allElements = root.querySelectorAll('*');
+  const allElements = safeQuerySelectorAll(safeRoot, '*');
   const maxScan = Math.min(allElements.length, 1200);
 
   for (let i = 0; i < maxScan; i++) {
     const el = allElements[i];
     if (!el) continue;
-    const style = window.getComputedStyle(el);
+    const style = safeGetComputedStyle(el);
+    if (!style) continue;
 
     // Record Colors
-    const bgHex = cssColorToHex(style.backgroundColor);
+    const bgVal = safeGetPropertyValue(style, 'background-color');
+    const bgHex = cssColorToHex(bgVal);
     if (bgHex) recordColor(bgHex, 'background');
 
-    const textHex = cssColorToHex(style.color);
+    const textVal = safeGetPropertyValue(style, 'color');
+    const textHex = cssColorToHex(textVal);
     if (textHex) recordColor(textHex, 'text');
 
-    const borderHex = cssColorToHex(style.borderColor);
-    if (borderHex && style.borderWidth !== '0px') recordColor(borderHex, 'border');
+    const borderVal = safeGetPropertyValue(style, 'border-color');
+    const borderWidth = safeGetPropertyValue(style, 'border-width');
+    const borderHex = cssColorToHex(borderVal);
+    if (borderHex && borderWidth && borderWidth !== '0px') recordColor(borderHex, 'border');
 
     // Spacing
-    [style.paddingTop, style.paddingLeft, style.marginTop, style.marginLeft, style.gap].forEach((sp) => {
+    [
+      safeGetPropertyValue(style, 'padding-top'),
+      safeGetPropertyValue(style, 'padding-left'),
+      safeGetPropertyValue(style, 'margin-top'),
+      safeGetPropertyValue(style, 'margin-left'),
+      safeGetPropertyValue(style, 'gap'),
+    ].forEach((sp) => {
       if (sp && sp !== '0px' && sp !== 'normal') {
         spacingFreq.set(sp, (spacingFreq.get(sp) || 0) + 1);
       }
     });
 
     // Radius
-    if (style.borderRadius && style.borderRadius !== '0px') {
-      radiusFreq.set(style.borderRadius, (radiusFreq.get(style.borderRadius) || 0) + 1);
+    const br = safeGetPropertyValue(style, 'border-radius');
+    if (br && br !== '0px') {
+      radiusFreq.set(br, (radiusFreq.get(br) || 0) + 1);
     }
 
     // Shadow
-    if (style.boxShadow && style.boxShadow !== 'none') {
-      shadowFreq.set(style.boxShadow, (shadowFreq.get(style.boxShadow) || 0) + 1);
+    const bs = safeGetPropertyValue(style, 'box-shadow');
+    if (bs && bs !== 'none') {
+      shadowFreq.set(bs, (shadowFreq.get(bs) || 0) + 1);
     }
   }
 
@@ -69,35 +95,44 @@ export function extractDesignTokens(root: Element = document.body): DesignTokens
   const typographyTokens: TypographyToken[] = [];
 
   for (const tag of typographyTags) {
-    const el = root.querySelector(tag) || (tag === 'p' ? root.querySelector('div') : null);
+    const el = safeQuerySelector(safeRoot, tag) || (tag === 'p' ? safeQuerySelector(safeRoot, 'div') : null);
     if (el) {
-      const style = window.getComputedStyle(el);
-      const fontFam = (style.fontFamily.split(',')[0] || '').replace(/['"]/g, '').trim();
-      typographyTokens.push({
-        tag,
-        fontFamily: fontFam || baseFont,
-        fontSize: style.fontSize,
-        fontWeight: style.fontWeight,
-        lineHeight: style.lineHeight,
-        letterSpacing: style.letterSpacing === 'normal' ? '0px' : style.letterSpacing,
-        color: cssColorToHex(style.color) || bodyText,
-      });
+      const style = safeGetComputedStyle(el);
+      if (style) {
+        const rawFont = safeGetPropertyValue(style, 'font-family');
+        const fontFam = safeTrim(rawFont.split(',')[0]?.replace(/['"]/g, ''));
+        const letterSpacing = safeGetPropertyValue(style, 'letter-spacing');
+
+        typographyTokens.push({
+          tag,
+          fontFamily: fontFam || baseFont,
+          fontSize: safeGetPropertyValue(style, 'font-size') || '16px',
+          fontWeight: safeGetPropertyValue(style, 'font-weight') || '400',
+          lineHeight: safeGetPropertyValue(style, 'line-height') || 'normal',
+          letterSpacing: letterSpacing === 'normal' || !letterSpacing ? '0px' : letterSpacing,
+          color: cssColorToHex(safeGetPropertyValue(style, 'color')) || bodyText,
+        });
+      }
     }
   }
 
-  // 4. CSS Variables from :root
+  // 4. CSS Variables from :root (Safely handle cross-origin stylesheets)
   const cssVariables: Record<string, string> = {};
   try {
-    for (const sheet of Array.from(document.styleSheets)) {
+    for (const sheet of Array.from(document.styleSheets || [])) {
       try {
-        for (const rule of Array.from(sheet.cssRules || [])) {
+        const rules = sheet.cssRules || (sheet as any).rules || [];
+        for (const rule of Array.from(rules)) {
           if (rule instanceof CSSStyleRule && (rule.selectorText === ':root' || rule.selectorText === 'html')) {
-            for (let i = 0; i < rule.style.length; i++) {
-              const prop = rule.style[i];
-              if (prop && prop.startsWith('--')) {
-                const val = rule.style.getPropertyValue(prop);
-                if (val) {
-                  cssVariables[prop] = val.trim();
+            const styleObj = rule.style;
+            if (styleObj) {
+              for (let i = 0; i < styleObj.length; i++) {
+                const prop = styleObj[i];
+                if (prop && prop.startsWith('--')) {
+                  const val = safeTrim(styleObj.getPropertyValue(prop));
+                  if (val) {
+                    cssVariables[prop] = val;
+                  }
                 }
               }
             }
@@ -113,14 +148,16 @@ export function extractDesignTokens(root: Element = document.body): DesignTokens
 
   // 5. Font Sources
   const fontSources: Array<{ family: string; source: string; weights: string[] }> = [];
-  const googleFontLinks = document.querySelectorAll('link[href*="fonts.googleapis.com"]');
+  const googleFontLinks = safeQuerySelectorAll(document, 'link[href*="fonts.googleapis.com"]');
   googleFontLinks.forEach((link) => {
-    const href = link.getAttribute('href') || '';
-    fontSources.push({
-      family: href,
-      source: 'Google Fonts',
-      weights: [],
-    });
+    const href = safeGetAttribute(link, 'href') || '';
+    if (href) {
+      fontSources.push({
+        family: href,
+        source: 'Google Fonts',
+        weights: [],
+      });
+    }
   });
 
   const getTopKeys = (map: Map<string, number>, limit: number): string[] => {

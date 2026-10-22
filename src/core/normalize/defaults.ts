@@ -15,7 +15,7 @@ const DEFAULT_CSS_VALUES: Record<string, (val: string) => boolean> = {
   'box-shadow': (v) =>
     v === 'none' ||
     v === '' ||
-    /^(rgba?\([^)]+\)\s+0px\s+0px\s+0px\s+0px,?\s*)+$/.test(v.trim()),
+    (typeof v === 'string' && /^(rgba?\([^)]+\)\s+0px\s+0px\s+0px\s+0px,?\s*)+$/.test(v.trim())),
   border: (v) => v.startsWith('0px') || v.includes('none'),
   'border-width': (v) => v === '0px' || v === 'none',
   'border-style': (v) => v === 'none',
@@ -47,8 +47,8 @@ const DEFAULT_CSS_VALUES: Record<string, (val: string) => boolean> = {
   'line-height': (v) => v === 'normal',
 };
 
-function isZeroSpacing(val: string): boolean {
-  if (!val) return true;
+function isZeroSpacing(val: any): boolean {
+  if (!val || typeof val !== 'string') return true;
   const parts = val.trim().split(/\s+/);
   return parts.every((p) => p === '0px' || p === '0' || p === '0rem');
 }
@@ -58,8 +58,8 @@ function isZeroSpacing(val: string): boolean {
  * e.g. "16px 16px 16px 16px" -> "16px"
  * e.g. "10px 20px 10px 20px" -> "10px 20px"
  */
-export function normalizeShorthand(val: string): string {
-  if (!val) return val;
+export function normalizeShorthand(val: any): string {
+  if (!val || typeof val !== 'string') return '';
   const parts = val.trim().split(/\s+/);
   if (parts.length === 4 && parts[0] && parts[1] && parts[2] && parts[3]) {
     const [top, right, bottom, left] = parts as [string, string, string, string];
@@ -91,7 +91,7 @@ export function stripDefaultStyles(
   const isPositioned = position === 'absolute' || position === 'fixed' || position === 'sticky';
 
   for (const [key, rawValue] of Object.entries(styles)) {
-    if (!rawValue) continue;
+    if (!rawValue || typeof rawValue !== 'string') continue;
     const value = normalizeShorthand(rawValue.trim());
 
     // Root background should be kept even if transparent or standard
