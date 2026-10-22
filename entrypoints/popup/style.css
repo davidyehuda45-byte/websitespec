@@ -1,0 +1,7 @@
+/* Base reset for popup */
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #0F172A;
+  color: #F8FAFC;
+}
