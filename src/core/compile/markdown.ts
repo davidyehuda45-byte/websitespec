@@ -1,4 +1,7 @@
 import type { ProjectBlueprint, LayoutNode } from '../../types/blueprint';
+import { generateProjectFileTree } from './file-tree';
+import { generateTailwindThemeConfig } from './tailwind-theme';
+import { synthesizeComponentsFromBlueprint } from './prd-synthesizer';
 
 function formatStyles(styles: Record<string, string>): string {
   const entries = Object.entries(styles);
@@ -42,7 +45,7 @@ function renderLayoutNodeToMarkdown(node: LayoutNode, indentLevel: number = 0): 
     }
   }
 
-  // Render all children with 100% full fidelity (zero truncation)
+  // Render all children with 100% full fidelity
   for (const child of node.children || []) {
     lines.push(renderLayoutNodeToMarkdown(child, indentLevel + 1));
   }
@@ -53,35 +56,40 @@ function renderLayoutNodeToMarkdown(node: LayoutNode, indentLevel: number = 0): 
 export function compileBlueprintToMarkdown(project: ProjectBlueprint): string {
   const primaryPage = project.pages[0];
   const domain = project.domain || 'localhost';
+  const targetStackName = project.targetStack || 'Modern Frontend Framework';
 
-  let md = `# BLUEPRINT SPESIFIKASI UI: ${domain.toUpperCase()}
+  // Synthesize modular components
+  const modularComponents = synthesizeComponentsFromBlueprint(project);
+  const componentNames = modularComponents.map((c) => c.name);
 
-Dokumen spesifikasi UI lengkap dan presisi untuk AI coding agent. Seluruh struktur dan styling diekstrak langsung dari computed style browser dan DOM aktual dengan fidelitas penuh (tanpa pemangkasan).
+  // Generate dynamic file tree and tailwind theme
+  const fileTree = generateProjectFileTree(project, componentNames);
+  const tailwindConfig = primaryPage ? generateTailwindThemeConfig(primaryPage.tokens) : '';
+
+  return `# UI PRD & IMPLEMENTATION BLUEPRINT: ${domain.toUpperCase()}
+
+> Dokumen Spesifikasi Kebutuhan Produk (PRD), Arsitektur Struktur File, Design Tokens, dan Scaffolding Kode Siap Pakai untuk AI Coding Agent (Cursor, Windsurf, Claude Code, Cline).
 
 ---
 
 ## 1. ATURAN EKSEKUSI AGENT (NEGATIVE CONSTRAINTS)
 
 Harap patuhi aturan ketat di bawah ini saat membangun ulang antarmuka:
-1. JANGAN mengimprovisasi warna gradien ungu-biru fantasi, background glow/orbs, atau rounded berlebihan yang tidak tertera pada token.
-2. Gunakan HANYA palet HEX dan ukuran tipografi yang didefinisikan dalam bagian Global Design Tokens.
-3. Pertahankan copywriting asli secara presisi. Jangan mengganti teks dengan placeholder "Lorem ipsum" atau sinonim generik.
-4. Komponen Shared Layout (Header, Nav, Footer) WAJIB diimplementasikan sebagai komponen modular reusable, bukan diulang di setiap route.
-5. Gunakan flexbox/grid dan nilai gap/padding sesuai spesifikasi numerik yang tertera pada layout tree.
+1. **Zero Hallucination**: JANGAN mengimprovisasi warna gradien ungu-biru fantasi, background glow/orbs, atau radius yang tidak tertera pada token.
+2. **Strict Design System**: Gunakan HANYA palet HEX dan ukuran tipografi yang didefinisikan dalam Bagian 4 (Design System).
+3. **Preserve Copywriting**: Pertahankan copywriting asli secara presisi. Jangan mengganti teks dengan placeholder "Lorem ipsum" atau sinonim generik.
+4. **Modular Architecture**: Ikuti pohon struktur file pada Bagian 3 dan pisahkan komponen reusable sesuai Bagian 6.
+5. **Exact Layout Geometry**: Gunakan flexbox/grid dan nilai gap/padding numerik sesuai spesifikasi layout tree.
 
 ---
 
-## 2. METADATA PROYEK
+## 2. PRD EXECUTIVE SUMMARY & SPESIFIKASI UMUM
 
-- Domain Sumber: ${domain}
-- Jumlah Halaman: ${project.pages.length}
-- Target Stack Override: ${project.targetStack || 'Sesuai Stack Asli (Auto-detect)'}
-- Tanggal Ekstraksi: ${project.createdAt}
-- Viewport Referensi: ${primaryPage?.viewport ? `${primaryPage.viewport.width}x${primaryPage.viewport.height}px` : '1920x1080px'}
-
----
-
-## 3. TECH STACK REFERENSI & TARGET
+- **Domain Referensi**: ${domain}
+- **Jumlah Halaman**: ${project.pages.length}
+- **Target Stack Tujuan**: **${targetStackName}**
+- **Tanggal Ekstraksi**: ${project.createdAt}
+- **Viewport Referensi**: ${primaryPage?.viewport ? `${primaryPage.viewport.width}x${primaryPage.viewport.height}px` : '1920x1080px'}
 
 ### Stack Terdeteksi di Halaman Referensi
 ${
@@ -92,19 +100,10 @@ ${
             `- **${s.name}** [${s.category.toUpperCase()}] - Tingkat Keyakinan: ${s.confidence.toUpperCase()}\n  Bukti: ${s.evidence}`
         )
         .join('\n')
-    : '- Tidak terdeteksi framework khusus (HTML/CSS standar)'
+    : '- HTML5 / CSS Modern standar'
 }
 
-> CATATAN: Deteksi framework backend (seperti Laravel) didasarkan pada jejak artefak front-end (CSRF token, livewire wire:id, dsb) dan bersifat heuristik.
-
-### Target Stack Tujuan
-**${project.targetStack || 'Auto-detect (mengikuti stack terdeteksi di atas)'}**
-Bangun ulang UI dengan arsitektur yang lazim pada target stack ini.
-
----
-
-## 4. ROUTING MAP
-
+### Routing Map & Alur Navigasi
 | No | Path URL | Judul Halaman | Tautan Internal Terdeteksi |
 |---|---|---|---|
 ${project.pages
@@ -116,7 +115,24 @@ ${project.pages
 
 ---
 
-## 5. GLOBAL DESIGN TOKENS
+## 3. ARSITEKTUR STRUKTUR FILE PROYEK (TARGET STACK)
+
+Gunakan struktur direktori modular di bawah ini saat menyusun proyek di repo lokal Anda:
+
+\`\`\`
+${fileTree}
+\`\`\`
+
+---
+
+## 4. DESIGN SYSTEM & KONFIGURASI TEMA TAILWIND
+
+### Siap Pakai: \`tailwind.config.js\`
+Salin konfigurasi ini langsung ke proyek target Anda:
+
+\`\`\`javascript
+${tailwindConfig}
+\`\`\`
 
 ### Palet Warna Utama
 | HEX | Peran Dominan | Frekuensi Penggunaan |
@@ -143,31 +159,15 @@ ${
     : '| body | sans-serif | 16px | 400 | normal | 0px | `#111827` |'
 }
 
-### Skala Spacing Terdeteksi
-${
-  primaryPage?.tokens.spacingScale.length
-    ? primaryPage.tokens.spacingScale.map((s) => `- \`${s}\``).join(' ')
-    : '- 4px, 8px, 12px, 16px, 24px, 32px'
-}
-
-### Skala Border Radius
-${
-  primaryPage?.tokens.radiusScale.length
-    ? primaryPage.tokens.radiusScale.map((r) => `- \`${r}\``).join(' ')
-    : '- 4px, 8px, 12px'
-}
-
-### Skala Box Shadow
-${
-  primaryPage?.tokens.shadowScale.length
-    ? primaryPage.tokens.shadowScale.map((sh) => `- \`${sh}\``).join('\n')
-    : '- none'
-}
+### Skala Spacing & Radius
+- **Spacing**: ${primaryPage?.tokens.spacingScale.length ? primaryPage.tokens.spacingScale.map((s) => `\`${s}\``).join(', ') : '4px, 8px, 12px, 16px'}
+- **Border Radius**: ${primaryPage?.tokens.radiusScale.length ? primaryPage.tokens.radiusScale.map((r) => `\`${r}\``).join(', ') : '4px, 8px, 22px'}
+- **Box Shadow**: ${primaryPage?.tokens.shadowScale.length ? primaryPage.tokens.shadowScale.map((sh) => `\`${sh}\``).join('; ') : 'none'}
 
 ${
   Object.keys(primaryPage?.tokens.cssVariables || {}).length > 0
     ? `### CSS Custom Properties (:root)\n\`\`\`css\n:root {\n${Object.entries(primaryPage?.tokens.cssVariables || {})
-        .slice(0, 50)
+        .slice(0, 40)
         .map(([k, v]) => `  ${k}: ${v};`)
         .join('\n')}\n}\n\`\`\`\n`
     : ''
@@ -175,22 +175,57 @@ ${
 
 ---
 
-## 6. SHARED LAYOUTS (KOMPONEN BERSAMA)
+## 5. SHARED LAYOUT ARCHITECTURE
+
+Komponen layout bersama yang digunakan lintas rute:
 
 ${
   project.sharedLayouts.length > 0
     ? project.sharedLayouts
         .map(
           (sl) =>
-            `### Shared [${sl.landmark.toUpperCase()}]\nDigunakan pada halaman: ${sl.presentInPages.map((p) => `\`${p}\``).join(', ')}\n\n${renderLayoutNodeToMarkdown(sl.node, 0)}`
+            `### Shared [${sl.landmark.toUpperCase()}]\nDigunakan pada rute: ${sl.presentInPages.map((p) => `\`${p}\``).join(', ')}\n\n${renderLayoutNodeToMarkdown(sl.node, 0)}`
         )
         .join('\n\n---\n\n')
-    : '_Tidak ada komponen bersama yang terdeteksi secara otomatis (halaman tunggal atau struktur berbeda)._'
+    : '_Tidak ada shared layout multi-halaman yang identik. Buat layout master sesuai Bagian 3._'
 }
 
 ---
 
-## 7. SPESIFIKASI PER HALAMAN
+## 6. KATALOG KOMPONEN MODULAR & TEMPLATE KODE (SCAFFOLDING)
+
+Komponen-komponen modular yang disintesis dari halaman aktif beserta template kodenya:
+
+${modularComponents
+  .map(
+    (c, idx) => `### 6.${idx + 1} Komponen: \`<${c.name} />\`
+
+- **Target File**: \`${c.targetFile}\`
+- **Deskripsi**: ${c.description}
+- **Spesifikasi Visual**:
+  - Tata Letak: ${c.visualSpecs.layout}
+  - Dimensi: ${c.visualSpecs.dimensions}
+  - Warna: ${c.visualSpecs.colors}
+  ${c.visualSpecs.borderRadius ? `- Radius: \`${c.visualSpecs.borderRadius}\`` : ''}
+  ${c.visualSpecs.shadow ? `- Shadow: \`${c.visualSpecs.shadow}\`` : ''}
+${c.copywriting.length > 0 ? `- **Copywriting Asli**: ${c.copywriting.map((txt) => `"${txt}"`).join(', ')}` : ''}
+${c.attributes.placeholder ? `- **Input Placeholder**: "${c.attributes.placeholder}"` : ''}
+${c.attributes.ariaLabel ? `- **Aria Label**: "${c.attributes.ariaLabel}"` : ''}
+${c.attributes.href ? `- **Link Href**: \`${c.attributes.href}\`` : ''}
+
+#### Scaffolding Kode Template:
+\`\`\`tsx
+${c.codeTemplate}
+\`\`\`
+`
+  )
+  .join('\n---\n\n')}
+
+---
+
+## 7. POHON STRUKTUR LAYOUT HALAMAN LENGKAP
+
+Struktur DOM bersarang lengkap dengan seluruh style non-default:
 
 ${project.pages
   .map(
@@ -199,7 +234,7 @@ ${project.pages
 - URL: ${page.url}
 - Waktu Tangkap: ${page.capturedAt}
 
-#### Pohon Struktur & Layout Komponen:
+#### Hierarchy Node:
 ${renderLayoutNodeToMarkdown(page.layoutTree, 0)}
 `
   )
@@ -207,7 +242,7 @@ ${renderLayoutNodeToMarkdown(page.layoutTree, 0)}
 
 ---
 
-## 8. DAFTAR ASET (ASSET INVENTORY)
+## 8. DAFTAR ASET & IKON (ASSET REGISTRY)
 
 | Tipe | Lokasi / Identifier | Dimensi Rendered | Keterangan / Alt |
 |---|---|---|---|
@@ -240,15 +275,25 @@ ${project.pages
 
 ---
 
-## 9. CHECKLIST VERIFIKASI UNTUK AGENT
+## 9. RENCANA EKSEKUSI BERTAHAP UNTUK AI AGENT
+
+Instruksi eksekusi untuk Cursor, Windsurf, atau Claude Code:
+1. **Fase 1 (Design Tokens)**: Buka file konfigurasi tema (\`tailwind.config.js\` atau CSS variables) dan masukkan palet warna HEX, radius, dan font sesuai Bagian 4.
+2. **Fase 2 (Shared Layout)**: Buat komponen layout master (\`AppLayout\` / \`app.blade.php\`) dan navigasi bersama sesuai Bagian 5.
+3. **Fase 3 (Modular Components)**: Buat file komponen modular di folder target masing-masing sesuai Bagian 6 menggunakan template kode yang telah disediakan.
+4. **Fase 4 (Page Assembly)**: Rakit halaman dan routing sesuai Bagian 2 dan Bagian 7. Hubungkan event handler atau dummy state.
+5. **Fase 5 (Audit & Verifikasi)**: Jalankan checklist Bagian 10 untuk memastikan tidak ada warna atau teks yang melenceng.
+
+---
+
+## 10. CHECKLIST AUDIT & VERIFIKASI
 
 Sebelum menganggap tugas selesai, pastikan checklist berikut terpenuhi:
-- [ ] Semua token warna memakai kode HEX dari Bagian 5, bukan nilai tak terdaftar.
+- [ ] Semua token warna memakai kode HEX dari Bagian 4, bukan nilai tebakan.
+- [ ] Seluruh file komponen dibuat sesuai struktur direktori pada Bagian 3.
 - [ ] Komponen Header, Navigasi, dan Footer dipisah menjadi komponen bersama (Shared Layout).
-- [ ] Route dan pathname cocok dengan Routing Map di Bagian 4.
+- [ ] Route dan pathname cocok dengan Routing Map di Bagian 2.
 - [ ] Seluruh copywriting menggunakan teks asli dari blueprint, bukan teks buatan.
-- [ ] Tata letak (flex/grid, gap, padding, margin) sesuai dengan pohon komponen.
+- [ ] Tata letak (flex/grid, gap, padding, margin) sesuai dengan spesifikasi komponen.
 `;
-
-  return md;
 }
