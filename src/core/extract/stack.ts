@@ -27,7 +27,24 @@ export function detectTechStack(): DetectedStack[] {
       });
     }
 
-    // 2. React
+    // 2. Vite (Universal Bundler & Modern Dev Tool)
+    const hasViteClient = Boolean(safeQuerySelector(document, 'script[src*="@vite/client"]'));
+    const hasViteModuleAsset = Boolean(
+      safeQuerySelector(document, 'script[type="module"][src*="/assets/index-"], script[type="module"][src*="/assets/main-"], link[rel="stylesheet"][href*="/assets/index-"]')
+    );
+    const hasModulePreload = Boolean(safeQuerySelector(document, 'link[rel="modulepreload"]'));
+    const isVite = hasViteClient || (hasViteModuleAsset && (hasModulePreload || Boolean(safeQuerySelector(document, 'script[type="module"]'))));
+
+    if (isVite) {
+      detected.push({
+        name: 'Vite',
+        category: 'framework',
+        confidence: 'high',
+        evidence: 'Ditemukan bundle aset Vite (modulepreload / /assets/index-*.js)',
+      });
+    }
+
+    // 3. React
     let hasReactFiber = false;
     for (let i = 0; i < maxScan; i++) {
       const el = elements[i];
@@ -42,10 +59,24 @@ export function detectTechStack(): DetectedStack[] {
       }
     }
 
+    const rootEl = document.getElementById('root');
+    const hasReactSpaRoot = Boolean(
+      rootEl &&
+      rootEl.children.length > 0 &&
+      !document.getElementById('__nuxt') &&
+      !document.getElementById('__svelte') &&
+      !safeQuerySelector(document, '[ng-version]')
+    );
+
+    const hasReactScript = Boolean(
+      safeQuerySelector(document, 'script[src*="react"], script[src*="react-dom"]')
+    );
+
     if (
       safeQuerySelector(document, '[data-reactroot]') ||
       hasReactFiber ||
       (window as any)._reactRootContainer ||
+      (hasReactSpaRoot && (isVite || hasReactScript || Boolean(safeQuerySelector(document, 'script[type="module"]')))) ||
       detected.some((s) => s.name === 'Next.js')
     ) {
       if (!detected.some((s) => s.name === 'React')) {
@@ -53,7 +84,11 @@ export function detectTechStack(): DetectedStack[] {
           name: 'React',
           category: 'library',
           confidence: 'high',
-          evidence: 'Ditemukan React fiber / data-reactroot container',
+          evidence: hasReactFiber
+            ? 'Ditemukan React fiber property'
+            : hasReactSpaRoot
+            ? 'Ditemukan container #root dengan modul bundling SPA'
+            : 'Ditemukan container React',
         });
       }
     }

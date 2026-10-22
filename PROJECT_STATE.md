@@ -1,14 +1,20 @@
 # Project State: Blueprint Extractor
 
-**Status**: Implemented & Verified (v1.0.0 - Universal Dynamic PRD Edition)  
+**Status**: Implemented & Verified (v1.1.0 - Universal Dynamic PRD & Deep SPA Stack Detection)  
 **Platform**: Chrome, Edge, Brave, Firefox (MV2 & MV3)  
 **Framework**: WXT + React 19 + TypeScript + Vite  
 
 ## Key Components Implemented
-- `src/core/extract/stack.ts`: Enhanced Tech Stack Detector with deep detection for **Laravel (Blade / Livewire / Inertia)** via `<input name="_token">`, `<input name="_method">`, `meta[name="csrf-token"]`, `XSRF-TOKEN` / `laravel_session` cookies, Alpine.js (`x-data`/`x-init`), Livewire 3 directives, and Vite `/build/assets/` bundles.
-- `src/core/compile/markdown.ts`: Automatic target stack resolver (`resolveTargetStack`) that maps detected Laravel + Tailwind to `Laravel 11 (Blade) + Tailwind CSS` on auto-detect. Dynamic product overview synthesizer with zero domain hardcoding.
-- `src/core/compile/prd-synthesizer.ts`: 100% Universal Dynamic PRD Engine. Dynamically synthesizes User Personas from route segments & button copywriting, infers business data entities from form inputs and repeating card grids across ANY website (E-Commerce, School, SaaS, Blogs, Portals), and generates Gherkin Acceptance Criteria.
-- `src/core/compile/file-tree.ts`: Generates stack-specific production folder structures (Laravel 11 Blade/Livewire, Next.js 15, React+Vite, Vue 3) taking the resolved stack into account.
+- `src/core/extract/stack.ts`: Universal Tech Stack Detector.
+  - Deep detection for **React + Vite SPAs** (detects dynamic `#root` container, Vite module assets `/assets/index-*.js`, modulepreloads, and `@vite/client`).
+  - Deep detection for **Laravel (Blade / Livewire / Inertia)** via `<input name="_token">`, `<input name="_method">`, `meta[name="csrf-token"]`, `XSRF-TOKEN` / `laravel_session` cookies, Alpine.js (`x-data`/`x-init`), and Vite `/build/assets/` bundles.
+  - Framework heuristics for Next.js, Vue, Nuxt, Svelte, Angular, WordPress, Tailwind CSS, Bootstrap, and Radix/Shadcn.
+- `src/core/compile/markdown.ts`: Automatic target stack resolver (`resolveTargetStack`) mapping detected React + Vite + Tailwind to `React + Vite + Tailwind CSS`, and Laravel + Tailwind to `Laravel 11 (Blade) + Tailwind CSS`.
+- `src/core/compile/prd-synthesizer.ts`: 100% Universal Dynamic PRD Engine.
+  - **Universal Entity Clustering**: Prevents recursion into card children; clusters repeating project cards, timeline milestones, pricing plans, catalog products, and articles into clean, singular domain entities with rich fields (`nama`, `deskripsi`, `status`, `harga`, `tautan`, key-values).
+  - **Hero & CTA Filter**: Disqualifies hero headings and action button clusters (e.g. "Curious builder," with CTA links) from becoming artificial entities.
+  - **Component Contract Cleansing**: Eliminates `#root`, `#app`, `body`, and `html` mount wrappers; promotes landmarks (`Navbar`, `Footer`, `HeroSection`, `Projects`, `Journey`).
+- `src/core/compile/file-tree.ts`: Generates stack-specific production folder structures (React+Vite, Laravel 11 Blade/Livewire, Next.js 15, Vue 3).
 - `src/core/compile/zip.ts`: Packages `PRD.md`, `BLUEPRINT.md`, `tailwind.config.js`, `tokens.json`, `assets/`, and an updated `AGENTS.md` execution guide.
 - `src/core/utils/dom-safe.ts`: Universal Defensive DOM Primitives (`safeString`, `safeTrim`, `safeClassList`, `safeGetComputedStyle`, `safeGetPropertyValue`, `safeQuerySelectorAll`, `safeTextContent`, `safeGetAttribute`). Immune to SVGAnimatedString, unhandled nulls, pseudo-element quirks, and invalid selectors.
 - `src/core/utils/inject.ts`: Multi-stage ping-pong handshake (`ensureContentScriptReady`) and dynamic content script injection across Firefox MV2 (`browser.tabs.executeScript`) and Chromium MV3 (`chrome.scripting.executeScript`).
@@ -28,7 +34,7 @@
 - `entrypoints/popup/`: React 19 popup with Lucide SVG icons, target stack override selector, profile toggle, cart page management, download/copy actions.
 
 ## Verification
-- Unit Tests: `pnpm test` (27 tests across 8 test suites in Vitest passing).
+- Unit Tests: `pnpm test` (31 tests across 9 test suites in Vitest passing).
 - Type Check: `pnpm compile` (`tsc --noEmit` 0 errors).
 - Build Targets:
   - Firefox MV2: `.output/firefox-mv2` & `blueprint-extractor-1.0.0-firefox.zip`

@@ -252,9 +252,22 @@ export function inferDataEntities(project: ProjectBlueprint): DataEntity[] {
     }
   });
 
-  // B. Mine Entities from Repeating Card Grids (Lists, Catalogs, Product Cards)
+  // B. Mine Entities from Repeating Card Grids (Lists, Catalogs, Product Cards, Portfolios, Timelines)
   project.pages.forEach((page) => {
-    const scanCards = (node: LayoutNode, inheritedHeading: string = '') => {
+    const scanCards = (node: LayoutNode, inheritedHeading: string = '', sectionId: string = '') => {
+      // Universal filter: Skip root/mounting wrappers and base HTML tags so we never treat page wrappers as an entity collection
+      const ignoredMountIds = new Set(['root', 'app', '__next', '__nuxt', 'viewport', 'wrapper', 'main-wrapper', 'layout-root']);
+      if ((node.id && ignoredMountIds.has(node.id.toLowerCase())) || node.tag === 'body' || node.tag === 'html') {
+        (node.children || []).forEach((c) => scanCards(c, inheritedHeading, sectionId));
+        return;
+      }
+
+      // Track section ID for semantic entity naming
+      let currentSectionId = sectionId;
+      if (node.id && node.id.length > 2 && !node.id.startsWith('__')) {
+        currentSectionId = node.id;
+      }
+
       // Find heading in this node or its immediate children
       let heading = inheritedHeading;
       if ((node.tag === 'h1' || node.tag === 'h2' || node.tag === 'h3') && node.text && node.text.length < 80) {
@@ -269,86 +282,186 @@ export function inferDataEntities(project: ProjectBlueprint): DataEntity[] {
       }
 
       // Check if this node contains repeating card-like children (2+ items)
-      const cardCandidates = (node.children || []).filter(
+      const rawCandidates = (node.children || []).filter(
         (c) => c.tag === 'div' || c.tag === 'article' || c.tag === 'li' || c.tag === 'section'
       );
 
+      // If candidates are full page sections with distinct IDs (#home, #projects, etc.), they are layout landmarks, not cards
+      const areDistinctPageSections =
+        rawCandidates.length >= 2 &&
+        rawCandidates.filter((c) => c.tag === 'section').length >= 2 &&
+        new Set(rawCandidates.map((c) => c.id).filter(Boolean)).size >= 2;
+
+      if (areDistinctPageSections) {
+        (node.children || []).forEach((c) => scanCards(c, heading, currentSectionId));
+        return;
+      }
+
+      // Disqualify if candidate items are merely action buttons or links (Hero CTA buttons)
+      const isHeroOrCtaCluster = (candidates: LayoutNode[], headingText: string) => {
+        if (headingText.endsWith(',') || /^(welcome|halo|hello|hi\b|hai\b|beranda|home|hero)/i.test(headingText.trim())) {
+          return true;
+        }
+        const allAreButtonsOrLinks = candidates.every((c) => {
+          const isDirectBtn = c.tag === 'button' || c.tag === 'a';
+          const hasSingleBtnChild = (c.children || []).length === 1 && (c.children[0]?.tag === 'button' || c.children[0]?.tag === 'a');
+          const hasNoParagraphs = !(c.children || []).some((ch) => ch.tag === 'p');
+          return (isDirectBtn || hasSingleBtnChild) && hasNoParagraphs && (!c.text || c.text.length < 35);
+        });
+        return allAreButtonsOrLinks;
+      };
+
+      const cardCandidates = rawCandidates.filter((c) => {
+        if (c.tag === 'button') return false;
+        if (c.tag === 'a' && (!c.children || c.children.length === 0)) return false;
+        return Boolean(c.text && c.text.trim().length > 0) || (c.children || []).length > 0;
+      });
+
       const hasRepeatingCards =
         cardCandidates.length >= 2 &&
-        cardCandidates.every((c) => (c.children || []).length > 0 || c.text);
+        !isHeroOrCtaCluster(cardCandidates, heading);
 
-      if (hasRepeatingCards && heading) {
-        const cleanName = heading
-          .replace(/^(Katalog|Daftar|List|Semua|Tabel|Data|Koleksi|Rekomendasi|Popular|Featured)\s+/i, '')
+      let entityCreated = false;
+
+      if (hasRepeatingCards && (heading || currentSectionId)) {
+        let baseName = heading || currentSectionId;
+        let cleanName = baseName
+          .replace(/^(Katalog|Daftar|List|Semua|Tabel|Data|Koleksi|Rekomendasi|Popular|Populer|Featured|Unggulan|Our|Latest|Recent|All|My)\s+/i, '')
+          .replace(/\s+(Katalog|List|Daftar|Tabel)$/i, '')
           .replace(/[^a-zA-Z0-9\s]/g, '')
           .trim();
+
+        // Universal semantic mapping for common collection patterns
+        const nameLower = cleanName.toLowerCase();
+        if (nameLower === 'projects' || nameLower === 'proyek' || nameLower === 'portfolio') cleanName = 'Project';
+        else if (nameLower === 'journey' || nameLower === 'timeline' || nameLower === 'milestones') cleanName = 'JourneyMilestone';
+        else if (nameLower === 'services' || nameLower === 'layanan') cleanName = 'Service';
+        else if (nameLower === 'products' || nameLower === 'produk') cleanName = 'Product';
+        else if (nameLower === 'articles' || nameLower === 'posts' || nameLower === 'berita') cleanName = 'Article';
+        else if (nameLower === 'skills' || nameLower === 'keahlian') cleanName = 'Skill';
+        else if (nameLower === 'testimonials' || nameLower === 'reviews' || nameLower === 'ulasan') cleanName = 'Testimonial';
+        else if (nameLower === 'pricing' || nameLower === 'plans' || nameLower === 'paket') cleanName = 'PricingPlan';
+        else if (nameLower === 'team' || nameLower === 'members' || nameLower === 'anggota') cleanName = 'TeamMember';
+        else if (nameLower === 'faqs' || nameLower === 'faq') cleanName = 'FaqItem';
+
         const entityName = toPascalCase(cleanName);
 
         if (entityName.length >= 3 && !seenEntityNames.has(entityName)) {
           seenEntityNames.add(entityName);
-
-          const sampleCard = cardCandidates[0]!;
-          const cardTexts: string[] = [];
-          let cardTitle = '';
-          let badgeText = '';
-
-          const inspectCard = (cn: LayoutNode) => {
-            if ((cn.tag === 'h3' || cn.tag === 'h4' || cn.tag === 'h2') && !cardTitle && cn.text) {
-              cardTitle = cn.text.trim();
-            }
-            if (
-              (cn.styles['border-radius']?.includes('9999px') || cn.styles['border-radius']?.includes('50%')) &&
-              cn.text &&
-              !badgeText
-            ) {
-              badgeText = cn.text.trim();
-            }
-            if (cn.text && cn.text.length < 60) {
-              cardTexts.push(cn.text.trim());
-            }
-            (cn.children || []).forEach(inspectCard);
-          };
-          inspectCard(sampleCard);
+          entityCreated = true;
 
           const fields: DataField[] = [
             { name: 'id', type: 'string (UUID / Slug)', description: 'Identifier unik entitas' },
-            { name: 'nama', type: 'string', description: 'Nama atau judul utama item', example: cardTitle || 'Item' },
           ];
 
-          if (badgeText) {
+          let sampleTitle = '';
+          let sampleBadge = '';
+          let hasDesc = false;
+          let hasLink = false;
+          let hasPrice = false;
+          const keyValues = new Map<string, string>();
+
+          // Inspect sample cards to build rich schema
+          cardCandidates.slice(0, 3).forEach((card) => {
+            const inspectCard = (cn: LayoutNode) => {
+              if ((cn.tag === 'h2' || cn.tag === 'h3' || cn.tag === 'h4') && !sampleTitle && cn.text) {
+                sampleTitle = cn.text.trim();
+              }
+              if (cn.tag === 'p' && cn.text && cn.text.length > 20) {
+                hasDesc = true;
+              }
+              if (cn.tag === 'a' && (cn.href || cn.text)) {
+                hasLink = true;
+              }
+              if (cn.text && /[\$€£]|Rp\s*[0-9]|IDR|USD/i.test(cn.text)) {
+                hasPrice = true;
+              }
+              if (
+                (cn.styles['border-radius']?.includes('9999px') || cn.styles['border-radius']?.includes('50%')) &&
+                cn.text &&
+                !sampleBadge &&
+                cn.text.length < 30
+              ) {
+                sampleBadge = cn.text.trim();
+              }
+              if (cn.text && cn.text.length < 60) {
+                const kvMatch = cn.text.match(/^([A-Za-z0-9\s]{2,15}):\s*(.+)$/);
+                if (kvMatch && kvMatch[1] && kvMatch[2]) {
+                  const keyName = kvMatch[1].trim().toLowerCase().replace(/\s+/g, '_');
+                  if (!keyValues.has(keyName)) keyValues.set(keyName, kvMatch[2].trim());
+                }
+              }
+              (cn.children || []).forEach(inspectCard);
+            };
+            inspectCard(card);
+          });
+
+          fields.push({
+            name: 'nama',
+            type: 'string',
+            description: 'Nama atau judul utama item',
+            example: sampleTitle || 'Item',
+          });
+
+          if (hasDesc) {
             fields.push({
-              name: 'status',
-              type: 'string / enum',
-              description: 'Status atau badge penanda item',
-              example: badgeText,
+              name: 'deskripsi',
+              type: 'string (text)',
+              description: 'Deskripsi rinci atau penjelasan item',
             });
           }
 
-          // Search for key-value labels (e.g. "Pembina: ...", "Harga: ...", "Lokasi: ...")
-          cardTexts.forEach((txt) => {
-            const kvMatch = txt.match(/^([A-Za-z0-9\s]{2,15}):\s*(.+)$/);
-            if (kvMatch && kvMatch[1] && kvMatch[2]) {
-              const keyName = kvMatch[1].trim().toLowerCase().replace(/\s+/g, '_');
-              if (!fields.some((f) => f.name === keyName)) {
-                fields.push({
-                  name: keyName,
-                  type: 'string',
-                  description: `Atribut ${kvMatch[1].trim()}`,
-                  example: kvMatch[2].trim(),
-                });
-              }
+          if (sampleBadge) {
+            fields.push({
+              name: 'status',
+              type: 'string / enum',
+              description: 'Status, kategori, atau badge penanda item',
+              example: sampleBadge,
+            });
+          }
+
+          if (hasPrice) {
+            fields.push({
+              name: 'harga',
+              type: 'string / number',
+              description: 'Nominal harga atau biaya layanan',
+            });
+          }
+
+          if (hasLink) {
+            fields.push({
+              name: 'tautan',
+              type: 'string (URL)',
+              description: 'Tautan eksternal atau detail halaman',
+            });
+          }
+
+          keyValues.forEach((val, key) => {
+            if (!fields.some((f) => f.name === key)) {
+              fields.push({
+                name: key,
+                type: 'string',
+                description: `Atribut ${key}`,
+                example: val,
+              });
             }
           });
 
           entities.push({
             name: entityName,
-            description: `Entitas data yang disintesis dari section berulang "${heading}".`,
+            description: `Entitas data yang disintesis dari section koleksi "${heading || currentSectionId}".`,
             fields,
           });
         }
       }
 
-      (node.children || []).forEach((c) => scanCards(c, heading));
+      // If this node represents a repeating collection, DO NOT recurse into each individual card!
+      // This prevents fragmented sub-entities from card layout wrappers across all websites.
+      if (hasRepeatingCards && entityCreated) {
+        return;
+      }
+
+      (node.children || []).forEach((c) => scanCards(c, heading, currentSectionId));
     };
 
     scanCards(page.layoutTree);
@@ -487,6 +600,13 @@ export function synthesizeComponentContracts(project: ProjectBlueprint): Compone
   const folder = isBlade ? 'resources/views/components/' : isVue ? 'src/components/' : 'components/ui/';
 
   const walk = (node: LayoutNode) => {
+    // Universal filter: Skip root/mounting wrappers and base HTML tags so we never produce fake <Root />, <App />, or <Body /> components
+    const ignoredMountIds = new Set(['root', 'app', '__next', '__nuxt', 'viewport', 'wrapper', 'main-wrapper', 'layout-root']);
+    if ((node.id && ignoredMountIds.has(node.id.toLowerCase())) || node.tag === 'body' || node.tag === 'html') {
+      (node.children || []).forEach(walk);
+      return;
+    }
+
     const isLandmark = ['header', 'footer', 'nav', 'main', 'aside'].includes(node.tag);
     const hasSection = Boolean(node.tag === 'section' || node.tag === 'form' || (node.id && node.id.length > 2 && !node.id.startsWith('__')));
 
@@ -496,7 +616,10 @@ export function synthesizeComponentContracts(project: ProjectBlueprint): Compone
       else if (node.tag === 'footer') name = 'Footer';
       else if (node.tag === 'main') name = 'MainContent';
       else if (node.tag === 'form' || (node.id || '').toLowerCase().includes('form')) name = 'InputForm';
-      else if (node.id) name = toPascalCase(node.id);
+      else if (node.id) {
+        if (node.id.toLowerCase() === 'home' || node.id.toLowerCase() === 'hero') name = 'HeroSection';
+        else name = toPascalCase(node.id);
+      }
       else name = `${toPascalCase(node.tag)}Section`;
 
       if (!seen.has(name) && name.length >= 3) {

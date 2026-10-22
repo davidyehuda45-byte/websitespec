@@ -171,4 +171,145 @@ describe('Intelligent Universal PRD Synthesizer', () => {
     const productEntity = entities.find((e) => e.name.includes('ProdukPopuler'))!;
     expect(productEntity.fields.some((f) => f.name === 'harga')).toBe(true);
   });
+
+  it('correctly clusters portfolio projects and timeline milestones without fragmenting into individual cards or hero CTA entities', () => {
+    const portfolioTree: LayoutNode = {
+      tag: 'div',
+      id: 'root',
+      styles: { height: '7313px' },
+      children: [
+        {
+          tag: 'header',
+          id: 'nav',
+          styles: {},
+          children: [{ tag: 'nav', styles: {}, text: 'David Yehuda', children: [] }],
+        },
+        // Hero section with CTA buttons
+        {
+          tag: 'section',
+          id: 'home',
+          styles: {},
+          children: [
+            { tag: 'h1', styles: {}, text: 'Curious builder,', children: [] },
+            {
+              tag: 'div',
+              styles: { display: 'flex' },
+              children: [
+                { tag: 'a', styles: {}, text: 'Get in touch', children: [] },
+                { tag: 'a', styles: {}, text: 'View Projects', children: [] },
+              ],
+            },
+          ],
+        },
+        // Projects section with 2 project cards
+        {
+          tag: 'section',
+          id: 'projects',
+          styles: {},
+          children: [
+            { tag: 'h2', styles: {}, text: 'Featured Projects', children: [] },
+            {
+              tag: 'div',
+              styles: { display: 'grid' },
+              children: [
+                {
+                  tag: 'div',
+                  styles: {},
+                  children: [
+                    { tag: 'h3', styles: {}, text: 'PetCare: Sistem Penitipan Hewan', children: [] },
+                    { tag: 'p', styles: {}, text: 'Sistem reservasi dan manajemen penitipan hewan modern berbasis web.', children: [] },
+                    { tag: 'span', styles: { 'border-radius': '9999px' }, text: 'Laravel + Tailwind', children: [] },
+                  ],
+                },
+                {
+                  tag: 'div',
+                  styles: {},
+                  children: [
+                    { tag: 'h3', styles: {}, text: 'Personal Portfolio Dev', children: [] },
+                    { tag: 'p', styles: {}, text: 'Web portfolio modern dengan animasi interaktif dan dark mode.', children: [] },
+                    { tag: 'span', styles: { 'border-radius': '9999px' }, text: 'React + Vite', children: [] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        // Journey / Timeline section with 3 semester cards
+        {
+          tag: 'section',
+          id: 'journey',
+          styles: {},
+          children: [
+            { tag: 'h2', styles: {}, text: 'My Journey', children: [] },
+            {
+              tag: 'div',
+              styles: { display: 'flex' },
+              children: [
+                {
+                  tag: 'div',
+                  styles: {},
+                  children: [
+                    { tag: 'h3', styles: {}, text: 'Semester 1 - Foundation', children: [] },
+                    { tag: 'p', styles: {}, text: 'Mempelajari dasar algoritma pemrograman dan logika dasar komputer.', children: [] },
+                  ],
+                },
+                {
+                  tag: 'div',
+                  styles: {},
+                  children: [
+                    { tag: 'h3', styles: {}, text: 'Semester 2 - Web Development', children: [] },
+                    { tag: 'p', styles: {}, text: 'Membangun aplikasi web interaktif menggunakan HTML, CSS, JavaScript.', children: [] },
+                  ],
+                },
+                {
+                  tag: 'div',
+                  styles: {},
+                  children: [
+                    { tag: 'h3', styles: {}, text: 'Semester 3 - Modern Development', children: [] },
+                    { tag: 'p', styles: {}, text: 'Pengembangan arsitektur backend REST API dan framework frontend modern.', children: [] },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const portfolioProject: ProjectBlueprint = {
+      domain: 'reactportfolio-six-virid.vercel.app',
+      targetStack: 'React + Vite + Tailwind CSS',
+      outputProfile: 'full',
+      pages: [
+        {
+          pathname: '/',
+          title: 'David Yehuda Surbakti — Full-Stack Developer',
+          layoutTree: portfolioTree,
+          internalLinks: ['/'],
+        } as any,
+      ],
+      sharedLayouts: [],
+      createdAt: '2026-10-22',
+    };
+
+    const entities = inferDataEntities(portfolioProject);
+
+    // 1. Hero should NOT be inferred as an entity
+    expect(entities.some((e) => e.name.toLowerCase().includes('curious'))).toBe(false);
+
+    // 2. Projects should be clustered into Project / Proyek, NOT separate PetCare entity
+    expect(entities.some((e) => e.name === 'Project' || e.name === 'Proyek')).toBe(true);
+    expect(entities.some((e) => e.name.includes('PetCare'))).toBe(false);
+
+    // 3. Semesters should be clustered into JourneyMilestone, NOT Semester1, Semester2, Semester3
+    expect(entities.some((e) => e.name === 'JourneyMilestone' || e.name === 'TimelineMilestone')).toBe(true);
+    expect(entities.some((e) => e.name.includes('Semester1'))).toBe(false);
+
+    // 4. Component contracts should skip #root and name home as HeroSection
+    const contracts = synthesizeComponentContracts(portfolioProject);
+    expect(contracts.some((c) => c.name.toLowerCase() === 'root')).toBe(false);
+    expect(contracts.some((c) => c.name === 'HeroSection')).toBe(true);
+    expect(contracts.some((c) => c.name === 'Projects')).toBe(true);
+    expect(contracts.some((c) => c.name === 'Journey')).toBe(true);
+  });
 });
